@@ -37,6 +37,7 @@ import {
     VideoIcon,
     RotateCcw,
     CreditCard,
+    Calculator,
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
 import Administration from './components/views/Administration';
@@ -265,38 +266,74 @@ const routes: RouteAttributes[] = [
         ).length,
 },
 // In your routes configuration
+// In your routes configuration
 {
-    path: '/freight-payment',
-    element: <FreightPayment />,
     name: 'Freight Payment',
-    gateKey: 'freightPayment',  // ✅ ADDED permission key
-    icon: <CreditCard size={20} />,
-    notifications: () => 0,
-
+    path: 'freight-payment',
+    icon: <CreditCard size={18} />,
+    element: <FreightPayment />,
+    notifications: (sheetData: any[]) => {
+        if (!sheetData || !Array.isArray(sheetData)) return 0;
+        
+        // Filter items where Planned1 is not empty and Actual1 is empty
+        const pendingPayments = sheetData.filter(item => 
+            item.planned1 && 
+            item.planned1 !== '' && 
+            (!item.actual1 || item.actual1 === '')
+        );
+        
+        return pendingPayments.length;
+    }
 }
 ,
-    {
+   // In your routes configuration
+{
+    name: 'Fixed Asset Payment',
     path: 'Make-Payment',
-    gateKey: 'makePayment',  // ✅ ADDED permission key
-    name: 'Fixed Asset Payment ',
-    icon: <FilePlus2 size={20} />,
+    icon: <CreditCard size={18} />,
     element: <MakePayment />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) =>
-            sheet.planned7 &&
-            sheet.planned7.toString().trim() !== '' &&
-            (!sheet.actual7 || sheet.actual7.toString().trim() === '') &&
-            sheet.makePaymentLink &&
-            sheet.makePaymentLink.toString().trim() !== ''
-        ).length,
+    notifications: (sheetData: any[]) => {
+        if (!sheetData || !Array.isArray(sheetData)) return 0;
+        
+        const pendingPayments = sheetData.filter((item: any) => {
+            const planned7IsNotNull = item.planned7 && item.planned7.toString().trim() !== '';
+            const actual7IsNull = !item.actual7 || item.actual7.toString().trim() === '';
+            const hasMakePaymentLink = item.makePaymentLink?.toString().trim() !== '';
+            
+            return planned7IsNotNull && actual7IsNull && hasMakePaymentLink;
+        });
+        
+        return pendingPayments.length;
+    }
 },
+
  {
-    path: 'pi-approval',  // Changed path
-    gateKey: 'exchangeMaterials',
-    name: 'PI Approval',
-    icon: <PackageCheck size={20} />,
+    name: 'PI Approvals',
+    path: 'pi-approvals',
     element: <ExchangeMaterials />,
-    notifications: () => 0,
+    icon: <Package2 size={18} />,
+    notifications: (sheetData: any[], context?: any) => {
+        // Type cast sheetData to poMasterSheet
+        const poMasterData = sheetData as any[];
+        if (!poMasterData || !Array.isArray(poMasterData)) return 0;
+        
+        // Get piApprovalSheet from context
+        const piApprovalSheet = context?.piApprovalSheet || [];
+        
+        // Create Set of approved PO numbers from PI Approval sheet
+        const approvedPONumbers = new Set(
+            piApprovalSheet.map((pi: any) => pi.piNo || pi.indentNo || '')
+        );
+        
+        // Filter poMasterData to get pending approvals
+        // Make sure poMasterData items have poNumber field
+        const pendingApprovals = poMasterData.filter((po: any) => {
+            // Check if PO has a number and is not in approved list
+            return po.poNumber && po.poNumber.trim() !== '' && !approvedPONumbers.has(po.poNumber);
+        });
+        
+        return pendingApprovals.length;
+    }
 },
 {
     path: 'exchange-materials', 
@@ -380,38 +417,90 @@ const routes: RouteAttributes[] = [
         ).length,
 },
 
-    {
-        path: 'rectify-the-mistake',
-        gateKey: 'rectifyTheMistake',
-        name: 'Rectify the mistake',
-        icon: <Users size={20} />,
-        element: <RectifyTheMistake />,
-        notifications: () => 0,
-    },
-    {
-        path: 'reaudit-data',
-        gateKey: 'reauditData',
-        name: 'Reaudit Data',
-        icon: <Users size={20} />,
-        element: <ReauditData />,
-        notifications: () => 0,
-    },
-    {
-        path: 'take-entry-by-tally',
-        gateKey: 'takeEntryByTelly',
-        name: 'Take Entry By Tally',
-        icon: <ClipboardList  size={20} />,
-        element: <TakeEntryByTally />,
-        notifications: () => 0,
-    },
-    {
-        path: 'AgainAuditing',
-        gateKey: 'againAuditing',
-        name: 'Again Auditing',
-        icon: <UserCheck  size={20} />,
-        element: <AgainAuditing />,
-        notifications: () => 0,
-    },
+   // In your routes configuration
+{
+    name: 'Rectify The Mistake',
+    path: 'rectify-mistake',
+    icon: <Calculator size={18} />,
+    element: <RectifyTheMistake />,
+    notifications: (sheetData: any[]) => {
+        // Type cast to tallyEntrySheet array
+        const tallyData = sheetData as any[];
+        if (!tallyData || !Array.isArray(tallyData)) return 0;
+        
+        // Count items where planned2 is not empty and actual2 is empty
+        const pendingRectifications = tallyData.filter((item: any) => 
+            item.planned2 && 
+            item.planned2 !== '' && 
+            (!item.actual2 || item.actual2 === '')
+        );
+        
+        return pendingRectifications.length;
+    }
+},
+   // In your routes configuration
+{
+    name: 'Reauditing Data',
+    path: 'reauditing-data',
+    icon: <Calculator size={18} />,  // Or use <SearchCheck size={18} /> if you have it
+    element: <ReauditData />,
+    notifications: (sheetData: any[]) => {
+        // Type cast to tallyEntrySheet array
+        const tallyData = sheetData as any[];
+        if (!tallyData || !Array.isArray(tallyData)) return 0;
+        
+        // Count items where planned3 is not empty and actual3 is empty
+        const pendingReaudits = tallyData.filter((item: any) => 
+            item.planned3 && 
+            item.planned3 !== '' && 
+            (!item.actual3 || item.actual3 === '')
+        );
+        
+        return pendingReaudits.length;
+    }
+},
+   // In your routes configuration
+{
+    name: 'Tally Entry',
+    path: 'tally-entry',
+    icon: <Calculator size={18} />,  // Or use <FileDigit size={18} /> or <BookOpen size={18} />
+    element: <TakeEntryByTally />,
+    notifications: (sheetData: any[]) => {
+        // Type cast to tallyEntrySheet array
+        const tallyData = sheetData as any[];
+        if (!tallyData || !Array.isArray(tallyData)) return 0;
+        
+        // Count items where planned4 is not empty and actual4 is empty
+        const pendingTallyEntries = tallyData.filter((item: any) => 
+            item.planned4 && 
+            item.planned4 !== '' && 
+            (!item.actual4 || item.actual4 === '')
+        );
+        
+        return pendingTallyEntries.length;
+    }
+},
+    // In your routes configuration
+{
+    name: 'Again Auditing',
+    path: 'again-auditing',
+    icon: <Package2 size={18} />,  // Or use <SearchCheck size={18} /> or <FileSearch size={18} />
+    element: <AgainAuditing />,
+    notifications: (sheetData: any[]) => {
+        // Type cast to tallyEntrySheet array
+        const tallyData = sheetData as any[];
+        if (!tallyData || !Array.isArray(tallyData)) return 0;
+        
+        // Count items where planned5 is not empty and actual5 is empty
+        const pendingAgainAudits = tallyData.filter((item: any) => 
+            item.planned5 && 
+            item.planned5 !== '' && 
+            (!item.actual5 || item.actual5 === '')
+        );
+        
+        return pendingAgainAudits.length;
+    }
+},
 
     // {
     //     path: 'store-out-approval',

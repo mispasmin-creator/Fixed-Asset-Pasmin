@@ -49,7 +49,7 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         return true;
     });
 
-    const getSheetData = (path: string) => {
+   const getSheetData = (path: string) => {
     switch (path) {
         case 'Issue-data':
         case 'store-issue':
@@ -57,11 +57,13 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         case 'store-in':
             return storeInSheet || [];
         case 'Full-Kiting':
-        case 'freight-payment':  // ✅ ADDED
+        case 'freight-payment':  // ✅ UPDATED - Add freight-payment
             return fullkittingSheet || [];
         case 'take-entry-by-tally':
             return tallyEntrySheet || [];
         case 'po-history':
+        case 'Send-Debit-Note':  // ✅ Make sure this returns storeInSheet
+            return storeInSheet || [];
         case 'create-po':
             return poMasterSheet || [];
         case 'pending-poss':
@@ -69,16 +71,26 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         case 'Bill-Not-Received':
         case 'Quality-Check-In-Received-Item':
         case 'Send-Debit-Note':
-        case 'Make-Payment':  // ✅ ADDED
-            return storeInSheet || [];
+        case 'Make-Payment':
+            return indentSheet || [];
         case 'audit-data':
+             return tallyEntrySheet || [];
+        case 'rectify-mistake':  // ✅ ADDED - Make sure this matches your route path
+            return tallyEntrySheet || [];
+        case 'reauditing-data':  // ✅ ADDED - Make sure this matches your route path
             return tallyEntrySheet || [];
         case 'Payment-Status':
+         case 'again-auditing':  // ✅ ADDED - Make sure this matches your route path
+            return tallyEntrySheet || [];
+        case 'pi-approvals':
+        case 'tally-entry':  // ✅ ADDED - Make sure this matches your route path
+            return tallyEntrySheet || [];  // ✅ ADDED - Make sure this matches your route path
+            return poMasterSheet || [];
             return paymentHistorySheet || [];
         case 'DBforPc':
             return pcReportSheet || [];
-        case 'inventory':  // ✅ ADDED
-            return indentSheet|| []; // Make sure you have inventorySheet in context
+        case 'inventory':
+            return indentSheet || [];
         default:
             return indentSheet || [];
     }
