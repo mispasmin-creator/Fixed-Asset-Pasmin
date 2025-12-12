@@ -293,12 +293,25 @@ export type UserPermissions = {
     billNotReceived: boolean;
     storeIn: boolean;
     issueData: boolean;
-    piApprovalView?: boolean;  // ✅ ADDED: For PI Approval page access
-    piApprovalAction?: boolean;  // ✅ ADDED: For PI Approval actions
+    piApprovalView?: boolean;
+    piApprovalAction?: boolean;
+    
+    // ✅ ADD THESE NEW PERMISSIONS BASED ON YOUR SHEET HEADER
+    inventory?: boolean;          // For "Inventory" access
+    poHistory?: boolean;          // For "PO History" access (mentioned in sheet)
+    freightPayment?: boolean;     // For "Freight Payment" access
+    makePayment?: boolean;        // For "Make Payment" access
+    trainingVideo?: boolean;      // For "Training Video" access
+    license?: boolean;            // For "License" access
+    link?: boolean;               // For "Link" access (from sheet)
 };
+
 
 export const allPermissionKeys = [
     "administrate",
+    "storeIssue",           // Updated to match sheet header
+    "issueData",            // Updated to match sheet header
+    "inventory",            // Added
     "createIndent",
     "createPo",
     "indentApprovalView",
@@ -314,7 +327,7 @@ export const allPermissionKeys = [
     "pendingIndentsView",
     "ordersView",
     "poMaster",
-    "storeIssue",
+    "getPurchase",          // From sheet
     "againAuditing",
     "takeEntryByTelly",
     "reauditData",
@@ -327,9 +340,14 @@ export const allPermissionKeys = [
     "dbForPc",
     "billNotReceived",
     "storeIn",
-    "issueData",
-    "piApprovalView",    // ✅ ADDED
-    "piApprovalAction",  // ✅ ADDED
+    "poHistory",            // Added
+    "freightPayment",       // Added
+    "makePayment",          // Added
+    "trainingVideo",        // Added
+    "license",              // Added
+    "link",                 // Added
+    "piApprovalView",
+    "piApprovalAction",
 ] as const;
 
 export type IssueSheet = {
@@ -497,6 +515,7 @@ export type PcReportSheet = {
     pendingRefrasynth: string | number;
 };
 
+// In your SheetContext types file
 export type FullkittingSheet = {
     rowIndex?: number;
     timestamp: string;
@@ -525,4 +544,11 @@ export type FullkittingSheet = {
     amount1: number;
     biltyImage?: string;
     firmNameMatch: string;
+    
+    // ✅ NEW COLUMNS ADDED
+    planned1?: string;           // New Planned column for freight payment
+    actual1?: string;            // New Actual column for freight payment
+    timeDelay1?: string;         // New Time Delay column for freight payment
+    paymentForm?: string;        // Payment Form column
+    fFPPaymentNumber?: string;   // FFP-Payment Number column
 };

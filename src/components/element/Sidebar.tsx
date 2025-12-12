@@ -50,35 +50,39 @@ export default function AppSidebar({ items }: AppSidebarProps) {
     });
 
     const getSheetData = (path: string) => {
-        switch (path) {
-            case 'Issue-data':
-            case 'store-issue':
-                return issueSheet || [];
-            case 'store-in':
-                return storeInSheet || [];
-            case 'Full-Kiting':
-                return fullkittingSheet || [];
-            case 'take-entry-by-tally':
-                return tallyEntrySheet || [];
-            case 'po-history':
-            case 'create-po':
-                return poMasterSheet || [];
-            case 'pending-poss':
-                return indentSheet || [];
-            case 'Bill-Not-Received':
-            case 'Quality-Check-In-Received-Item':
-            case 'Send-Debit-Note':
-                return storeInSheet || [];
-            case 'audit-data':
-                return tallyEntrySheet || [];
-            case 'Payment-Status':
-                return paymentHistorySheet || [];
-            case 'DBforPc':
-                return pcReportSheet || [];
-            default:
-                return indentSheet || [];
-        }
-    };
+    switch (path) {
+        case 'Issue-data':
+        case 'store-issue':
+            return issueSheet || [];
+        case 'store-in':
+            return storeInSheet || [];
+        case 'Full-Kiting':
+        case 'freight-payment':  // ✅ ADDED
+            return fullkittingSheet || [];
+        case 'take-entry-by-tally':
+            return tallyEntrySheet || [];
+        case 'po-history':
+        case 'create-po':
+            return poMasterSheet || [];
+        case 'pending-poss':
+            return indentSheet || [];
+        case 'Bill-Not-Received':
+        case 'Quality-Check-In-Received-Item':
+        case 'Send-Debit-Note':
+        case 'Make-Payment':  // ✅ ADDED
+            return storeInSheet || [];
+        case 'audit-data':
+            return tallyEntrySheet || [];
+        case 'Payment-Status':
+            return paymentHistorySheet || [];
+        case 'DBforPc':
+            return pcReportSheet || [];
+        case 'inventory':  // ✅ ADDED
+            return indentSheet|| []; // Make sure you have inventorySheet in context
+        default:
+            return indentSheet || [];
+    }
+};
 
     const getNotificationCount = (item: RouteAttributes) => {
         if (!item.notifications) return 0;

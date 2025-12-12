@@ -18,6 +18,7 @@ import TrainnigVideo from './components/views/TrainingVideo';
 import Liecense from './components/views/License'
 import MakePayment from './components/views/MakePayment';
 import Exchange from './components/views/Exchange'
+import  FreightPayment from './components/views/Payment';
 import type { RouteAttributes } from './types';
 import {
     LayoutDashboard,
@@ -34,7 +35,8 @@ import {
     Store,
     KeyRound,
     VideoIcon,
-    RotateCcw
+    RotateCcw,
+    CreditCard,
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
 import Administration from './components/views/Administration';
@@ -199,7 +201,7 @@ const routes: RouteAttributes[] = [
 
     {
     path: 'po-history',
-    gateKey: 'ordersView',
+    gateKey: 'poHistory',  // ✅ CHANGED from 'ordersView' to match sheet
     name: 'PO History',
     icon: <Package2 size={20} />,
     element: <Order />,
@@ -252,7 +254,7 @@ const routes: RouteAttributes[] = [
  {
     path: 'Full-Kiting',
     gateKey: 'ordersView',
-    name: 'Freight Payment',
+    name: 'Full Kiting',
     icon: <FilePlus2 size={20} />,
     element: <FullKiting />,
     notifications: (sheets: any[]) =>
@@ -262,9 +264,20 @@ const routes: RouteAttributes[] = [
             (!sheet.actual || sheet.actual.toString().trim() === '')
         ).length,
 },
+// In your routes configuration
+{
+    path: '/freight-payment',
+    element: <FreightPayment />,
+    name: 'Freight Payment',
+    gateKey: 'freightPayment',  // ✅ ADDED permission key
+    icon: <CreditCard size={20} />,
+    notifications: () => 0,
 
+}
+,
     {
     path: 'Make-Payment',
+    gateKey: 'makePayment',  // ✅ ADDED permission key
     name: 'Fixed Asset Payment ',
     icon: <FilePlus2 size={20} />,
     element: <MakePayment />,
@@ -286,7 +299,9 @@ const routes: RouteAttributes[] = [
     notifications: () => 0,
 },
 {
-    path: 'exchange-materials',  // Kept similar but different
+    path: 'exchange-materials', 
+    gateKey: 'exchangeMaterials',  // ✅ Fixed: use existing permission
+ // Kept similar but different
     name: 'Exchange Materials',
     icon: <PackageCheck size={20} />,
     element: <Exchange/>,
