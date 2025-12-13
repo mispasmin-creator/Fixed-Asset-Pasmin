@@ -83,9 +83,10 @@ export default function AppSidebar({ items }: AppSidebarProps) {
          case 'again-auditing':  // ✅ ADDED - Make sure this matches your route path
             return tallyEntrySheet || [];
         case 'pi-approvals':
+            return poMasterSheet || [];
+
         case 'tally-entry':  // ✅ ADDED - Make sure this matches your route path
             return tallyEntrySheet || [];  // ✅ ADDED - Make sure this matches your route path
-            return poMasterSheet || [];
             return paymentHistorySheet || [];
         case 'DBforPc':
             return pcReportSheet || [];

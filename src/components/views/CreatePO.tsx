@@ -918,38 +918,37 @@ const itemsArray = useFieldArray({
                                         </FormItem>
                                     )} />
                                     <FormField control={form.control} name="supplierAddress" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Supplier Address</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" readOnly={mode === 'revise'} placeholder="Enter supplier address" {...field} value={field.value || ''} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="gstin" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>GSTIN</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" readOnly={mode === 'revise'} placeholder="Enter GSTIN" {...field} value={field.value || ''} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
-                                </div>
-                                <div className="grid grid-cols-3 gap-x-5">
-                                    <FormField control={form.control} name="companyEmail" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Company Email</FormLabel>
-                                            <FormControl>
-                                                <Input 
-                                                    className="h-9" 
-                                                    type="email"
-                                                    readOnly={mode === 'revise'} 
-                                                    placeholder="Enter company email" 
-                                                    {...field} 
-                                                    value={field.value || ''} 
-                                                />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
+                                <FormItem>
+                                    <FormLabel>Supplier Address</FormLabel>
+                                    <FormControl>
+                                        <Input className="h-9" placeholder="Enter supplier address" {...field} value={field.value || ''} />
+                                    </FormControl>
+                                </FormItem>
+                            )} />
+                                                            <FormField control={form.control} name="gstin" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>GSTIN</FormLabel>
+                                    <FormControl>
+                                        <Input className="h-9" placeholder="Enter GSTIN" {...field} value={field.value || ''} />
+                                    </FormControl>
+                                </FormItem>
+                            )} />
+                                                            </div>
+                                                            <div className="grid grid-cols-3 gap-x-5">
+                                                                <FormField control={form.control} name="companyEmail" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Company Email</FormLabel>
+                                    <FormControl>
+                                        <Input 
+                                            className="h-9" 
+                                            type="email"
+                                            placeholder="Enter company email" 
+                                            {...field} 
+                                            value={field.value || ''} 
+                                        />
+                                    </FormControl>
+                                </FormItem>
+                            )} />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-x-5">
