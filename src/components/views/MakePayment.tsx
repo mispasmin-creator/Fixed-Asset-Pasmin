@@ -1,3 +1,4 @@
+
 import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
@@ -41,8 +42,15 @@ interface IndentSheetItem {
     paymentType?: string;
 }
 
+// Add interface for Payment History item
+interface PaymentHistoryItem {
+    uniqueNumber?: string;
+    status?: string;
+    // Add other fields if needed
+}
+
 export default function MakePayment() {
-    const { indentSheet, indentLoading, storeInSheet } = useSheets();
+    const { indentSheet, indentLoading, storeInSheet, paymentHistorySheet } = useSheets();
     const [tableData, setTableData] = useState<MakePaymentData[]>([]);
     const { user } = useAuth();
 
@@ -70,13 +78,36 @@ export default function MakePayment() {
             ])
         );
 
+        // Create a Set of paid indent numbers from Payment History
+        const paidIndentNumbers = new Set();
+        
+        // Process Payment History sheet
+        if (paymentHistorySheet && Array.isArray(paymentHistorySheet)) {
+            paymentHistorySheet.forEach((item: PaymentHistoryItem) => {
+                if (item.uniqueNumber) {
+                    // Add the Unique Number to the set of paid indents
+                    paidIndentNumbers.add(item.uniqueNumber.trim());
+                }
+            });
+        }
+        
+        console.log('Paid indent numbers from Payment History:', Array.from(paidIndentNumbers));
+
         const processedData = filteredByFirm
             .filter((sheet: IndentSheetItem) => {
-                const planned7IsNotNull = sheet.planned7 && sheet.planned7.toString().trim() !== '';
-                const actual7IsNull = !sheet.actual7 || sheet.actual7.toString().trim() === '';
-                const hasMakePaymentLink = sheet.makePaymentLink?.toString().trim() !== '';
+                const indentNumber = sheet.indentNumber?.trim();
                 
-                return planned7IsNotNull && actual7IsNull && hasMakePaymentLink;
+                // Check if indent number exists and is not already paid
+                const isAlreadyPaid = indentNumber ? paidIndentNumbers.has(indentNumber) : false;
+                
+                // Debug log
+                if (indentNumber) {
+                    console.log(`Indent ${indentNumber}: isAlreadyPaid=${isAlreadyPaid}, planned7="${sheet.planned7}", actual7="${sheet.actual7}"`);
+                }
+                
+                // Show only if NOT already paid AND has planned7 value
+                const planned7HasValue = sheet.planned7 && sheet.planned7.toString().trim() !== '';
+                return !isAlreadyPaid && planned7HasValue;
             })
             .map((sheet: IndentSheetItem) => {
                 const billData = storeInMap.get(sheet.indentNumber) || { 
@@ -100,6 +131,7 @@ export default function MakePayment() {
             })
             .sort((a, b) => b.indentNo.localeCompare(a.indentNo));
 
+        console.log('Processed data count:', processedData.length);
         setTableData(processedData);
 
         // Calculate stats
@@ -112,7 +144,7 @@ export default function MakePayment() {
             totalAdvanceAmount
         });
 
-    }, [indentSheet, storeInSheet, user.firmNameMatch]);
+    }, [indentSheet, storeInSheet, paymentHistorySheet, user.firmNameMatch]);
 
     // Handle Make Payment button click - Open specific Google Form link
     const handleMakePayment = (item: MakePaymentData) => {
@@ -230,7 +262,7 @@ export default function MakePayment() {
                             <DollarSign size={28} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Make Payment</h1>
+                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Make Payment </h1>
                             <p className="text-gray-600">Process and manage advance payments for purchase orders</p>
                         </div>
                     </div>

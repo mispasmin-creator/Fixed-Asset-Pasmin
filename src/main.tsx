@@ -292,15 +292,30 @@ const routes: RouteAttributes[] = [
     path: 'Make-Payment',
     icon: <CreditCard size={18} />,
     element: <MakePayment />,
-    notifications: (sheetData: any[]) => {
+    notifications: (sheetData: any[], context?: any) => {
         if (!sheetData || !Array.isArray(sheetData)) return 0;
         
+        // Get paymentHistorySheet from context
+        const paymentHistorySheet = context?.paymentHistorySheet || [];
+        
+        // Create Set of paid indent numbers from Payment History
+        const paidIndentNumbers = new Set();
+        
+        paymentHistorySheet.forEach((item: any) => {
+            const indentNo = item.uniqueNumber || item['Unique Number'] || item['UniqueNumber'];
+            if (indentNo) {
+                paidIndentNumbers.add(indentNo.toString().trim());
+            }
+        });
+        
+        // Count items that meet the criteria
         const pendingPayments = sheetData.filter((item: any) => {
             const planned7IsNotNull = item.planned7 && item.planned7.toString().trim() !== '';
             const actual7IsNull = !item.actual7 || item.actual7.toString().trim() === '';
             const hasMakePaymentLink = item.makePaymentLink?.toString().trim() !== '';
+            const isAlreadyPaid = item.indentNumber ? paidIndentNumbers.has(item.indentNumber.toString().trim()) : false;
             
-            return planned7IsNotNull && actual7IsNull && hasMakePaymentLink;
+            return planned7IsNotNull && actual7IsNull && hasMakePaymentLink && !isAlreadyPaid;
         });
         
         return pendingPayments.length;
@@ -364,21 +379,61 @@ const routes: RouteAttributes[] = [
 // },
    
 
-    {
+ {
     path: 'Quality-Check-In-Received-Item',
     gateKey: 'insteadOfQualityCheckInReceivedItem',
     name: 'Reject For GRN',
     icon: <Users size={20} />,
     element: <QuantityCheckInReceiveItem />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) => 
-            sheet.planned7 && 
-            sheet.planned7.toString().trim() !== '' && 
-            (!sheet.actual7 || sheet.actual7.toString().trim() === '')
-        ).length,
+    notifications: (sheets: any[]) => {
+        if (!sheets || !Array.isArray(sheets)) return 0;
+        
+        let count = 0;
+        
+        // Debug: Show what's being counted
+        const debugItems = [];
+        
+        sheets.forEach((sheet: any, index: number) => {
+            // Get all possible column names
+            const planned7 = sheet.planned7 || sheet['Planned 7'] || sheet['Planned7'];
+            const actual7 = sheet.actual7 || sheet['Actual 7'] || sheet['Actual7'];
+            const status = sheet.status || sheet['Status'] || sheet.reject || sheet['Reject'];
+            
+            // Convert to strings and trim
+            const planned7Str = planned7?.toString().trim() || '';
+            const actual7Str = actual7?.toString().trim() || '';
+            const statusStr = status?.toString().trim().toLowerCase() || '';
+            
+            // Check conditions
+            const hasPlanned7 = planned7Str !== '';
+            const hasNoActual7 = actual7Str === '';
+            
+            // Status should NOT be reject AND should not have actual7 filled
+            const isNotReject = statusStr !== 'reject';
+            
+            // If it has planned7 but no actual7 AND status is not reject
+            if (hasPlanned7 && hasNoActual7 && isNotReject) {
+                count++;
+                
+                // Debug info
+                if (debugItems.length < 5) {
+                    debugItems.push({
+                        row: index + 1,
+                        indentNo: sheet.indentNo || sheet.indentNumber || 'N/A',
+                        planned7: planned7Str,
+                        actual7: actual7Str,
+                        status: statusStr,
+                        firmNameMatch: sheet.firmNameMatch
+                    });
+                }
+            }
+        });
+        
+        // Log debug info
+        
+        return count;
+    }
 },
-
-
    
     // {
     //     path: 'Return-Material-To-Party',

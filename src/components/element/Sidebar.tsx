@@ -62,6 +62,7 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         case 'take-entry-by-tally':
             return tallyEntrySheet || [];
         case 'po-history':
+        case 'Quality-Check-In-Received-Item':  
         case 'Send-Debit-Note':  // ✅ Make sure this returns storeInSheet
             return storeInSheet || [];
         case 'create-po':
@@ -69,7 +70,6 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         case 'pending-poss':
             return indentSheet || [];
         case 'Bill-Not-Received':
-        case 'Quality-Check-In-Received-Item':
         case 'Send-Debit-Note':
         case 'Make-Payment':
             return indentSheet || [];
@@ -97,13 +97,57 @@ export default function AppSidebar({ items }: AppSidebarProps) {
     }
 };
 
-    const getNotificationCount = (item: RouteAttributes) => {
-        if (!item.notifications) return 0;
+   const getNotificationCount = (item: RouteAttributes) => {
+    if (!item.notifications) return 0;
+    
+    const sheetData = getSheetData(item.path);
+      // Special handling for Reject For GRN
+    if (item.path === 'Quality-Check-In-Received-Item') {
+        // Apply firm filtering like in your component
+        const filteredByFirm = sheetData.filter((item: any) => 
+            user?.firmNameMatch?.toLowerCase() === "all" || 
+            item.firmNameMatch === user?.firmNameMatch
+        );
         
-        const sheetData = getSheetData(item.path);
-        return item.notifications(sheetData);
-    };
-
+        // Count pending items (same logic as your component's useEffect)
+        return filteredByFirm.filter((sheet: any) => {
+            const hasPlanned7 = sheet.planned7 && sheet.planned7.toString().trim() !== '';
+            const hasNoActual7 = !sheet.actual7 || sheet.actual7.toString().trim() === '';
+            return hasPlanned7 && hasNoActual7;
+        }).length;
+    }
+    
+    // Special case for Make-Payment
+    if (item.path === 'Make-Payment') {
+        const indentData = sheetData;
+        const paymentHistoryData = paymentHistorySheet || [];
+        
+        // Create Set of paid indent numbers from Payment History
+        const paidIndentNumbers = new Set();
+        
+        paymentHistoryData.forEach((item: any) => {
+            const indentNo = item.uniqueNumber || item['Unique Number'] || item['UniqueNumber'];
+            if (indentNo) {
+                paidIndentNumbers.add(indentNo.toString().trim());
+            }
+        });
+        
+        // Count items that meet the criteria
+        const pendingPayments = indentData.filter((item: any) => {
+            const planned7IsNotNull = item.planned7 && item.planned7.toString().trim() !== '';
+            const actual7IsNull = !item.actual7 || item.actual7.toString().trim() === '';
+            const hasMakePaymentLink = item.makePaymentLink?.toString().trim() !== '';
+            const isAlreadyPaid = item.indentNumber ? paidIndentNumbers.has(item.indentNumber.toString().trim()) : false;
+            
+            return planned7IsNotNull && actual7IsNull && hasMakePaymentLink && !isAlreadyPaid;
+        });
+        
+        return pendingPayments.length;
+    }
+    
+    // For other routes
+    return item.notifications(sheetData);
+};
     const isActivePath = (path: string) => {
         return location.pathname.slice(1) === path;
     };
