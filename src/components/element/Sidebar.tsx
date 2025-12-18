@@ -35,6 +35,7 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         tallyEntrySheet,
         receivedSheet,
         paymentHistorySheet,
+        piApprovalSheet,  // ✅ ADD THIS LINE
         updateAll, 
         allLoading 
     } = useSheets();
@@ -72,7 +73,7 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         case 'Bill-Not-Received':
         case 'Send-Debit-Note':
         case 'Make-Payment':
-            return indentSheet || [];
+              return piApprovalSheet || [];
         case 'audit-data':
              return tallyEntrySheet || [];
         case 'rectify-mistake':  // ✅ ADDED - Make sure this matches your route path
@@ -97,19 +98,18 @@ export default function AppSidebar({ items }: AppSidebarProps) {
     }
 };
 
-   const getNotificationCount = (item: RouteAttributes) => {
+  const getNotificationCount = (item: RouteAttributes) => {
     if (!item.notifications) return 0;
     
     const sheetData = getSheetData(item.path);
-      // Special handling for Reject For GRN
+    
+    // Special handling for Reject For GRN
     if (item.path === 'Quality-Check-In-Received-Item') {
-        // Apply firm filtering like in your component
         const filteredByFirm = sheetData.filter((item: any) => 
             user?.firmNameMatch?.toLowerCase() === "all" || 
             item.firmNameMatch === user?.firmNameMatch
         );
         
-        // Count pending items (same logic as your component's useEffect)
         return filteredByFirm.filter((sheet: any) => {
             const hasPlanned7 = sheet.planned7 && sheet.planned7.toString().trim() !== '';
             const hasNoActual7 = !sheet.actual7 || sheet.actual7.toString().trim() === '';
@@ -117,29 +117,43 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         }).length;
     }
     
-    // Special case for Make-Payment
+     if (item.path === 'pi-approvals') {
+        return item.notifications(poMasterSheet, { 
+            user 
+        });
+    }
+    
+    
+    // ✅ UPDATED - Make-Payment now uses PI APPROVAL sheet directly
     if (item.path === 'Make-Payment') {
-        const indentData = sheetData;
-        const paymentHistoryData = paymentHistorySheet || [];
-        
-        // Create Set of paid indent numbers from Payment History
-        const paidIndentNumbers = new Set();
-        
-        paymentHistoryData.forEach((item: any) => {
-            const indentNo = item.uniqueNumber || item['Unique Number'] || item['UniqueNumber'];
-            if (indentNo) {
-                paidIndentNumbers.add(indentNo.toString().trim());
-            }
+        // Filter by firm
+        const filteredByFirm = sheetData.filter((sheet: any) => {
+            const firmMatch = sheet.firmNameMatch || '';
+            return user?.firmNameMatch?.toLowerCase() === "all" || firmMatch === user?.firmNameMatch;
         });
         
-        // Count items that meet the criteria
-        const pendingPayments = indentData.filter((item: any) => {
-            const planned7IsNotNull = item.planned7 && item.planned7.toString().trim() !== '';
-            const actual7IsNull = !item.actual7 || item.actual7.toString().trim() === '';
-            const hasMakePaymentLink = item.makePaymentLink?.toString().trim() !== '';
-            const isAlreadyPaid = item.indentNumber ? paidIndentNumbers.has(item.indentNumber.toString().trim()) : false;
+        // Count items that meet the criteria (same logic as MakePayment.tsx)
+        const pendingPayments = filteredByFirm.filter((sheet: any) => {
+            // Check Planned and Actual conditions
+            const plannedValue = sheet.planned?.toString().trim() || '';
+            const actualValue = sheet.actual?.toString().trim() || '';
             
-            return planned7IsNotNull && actual7IsNull && hasMakePaymentLink && !isAlreadyPaid;
+            const hasPlanned = plannedValue !== '' && 
+                              plannedValue !== 'N/A' && 
+                              plannedValue !== 'null' && 
+                              plannedValue !== 'undefined';
+            
+            const hasActual = actualValue !== '' && 
+                             actualValue !== 'N/A' && 
+                             actualValue !== 'null' && 
+                             actualValue !== 'undefined';
+            
+            // Check if payment form exists
+            const hasPaymentForm = sheet.paymentForm?.toString().trim() !== '' && 
+                                  sheet.paymentForm?.toString().trim() !== 'N/A';
+            
+            // Return true if all conditions are met
+            return hasPlanned && !hasActual && hasPaymentForm;
         });
         
         return pendingPayments.length;
@@ -148,6 +162,7 @@ export default function AppSidebar({ items }: AppSidebarProps) {
     // For other routes
     return item.notifications(sheetData);
 };
+
     const isActivePath = (path: string) => {
         return location.pathname.slice(1) === path;
     };

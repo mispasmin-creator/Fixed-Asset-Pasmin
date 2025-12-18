@@ -132,6 +132,10 @@ export async function fetchSheet(
     }
 
     // ✅ ADD: PI Approval case
+// Update the PI Approval case in fetchSheet function
+// Update the PI Approval case in fetchSheet function
+// Update the PI Approval case in fetchSheet function
+// Update the PI Approval case in fetchSheet function
 if (sheetName === 'PI APPROVAL' ) {
     console.log("📋 Processing PI Approval data:", raw.rows);
     
@@ -140,38 +144,82 @@ if (sheetName === 'PI APPROVAL' ) {
         return [];
     }
 
-    const piApprovalData = raw.rows.map((record: any) => {
-        console.log("📝 PI Approval record:", record);
+    const piApprovalData = raw.rows.map((record: any, index: number) => {
+        console.log(`📝 PI Approval record ${index}:`, record);
         
-        return {
-            rowIndex: record.rowIndex || 0,
-            timestamp: record.Timestamp || record.timestamp || '',
-            piNo: record['PI-No.'] || record.piNo || '',
-            indentNo: record['Indent No.'] || record.indentNo || '',
-            partyName: record['Party Name'] || record.partyName || '',
-            productName: record['Product Name'] || record.productName || '',
-            qty: parseFloat(record.Qty || record.qty || 0),
-            piAmount: parseFloat(record['P.I Amount'] || record.piAmount || 0),
-            piCopy: record['P.I Copy'] || record.piCopy || '',
-            poRateWithoutTax: parseFloat(record['Po Rate Without Tax'] || record.poRateWithoutTax || 0),
-            planned: record.Planned || record.planned || '',
-            actual: record.Actual || record.actual || '',
-            delay: record.Delay || record.delay || '',
-            status: record.Status || record.status || '',
-            approvalAmount: parseFloat(record['Approval Amoount'] || record.approvalAmount || 0),
-        } as PIApprovalSheet;
+        // Debug: Log all keys to see what's available
+        if (index === 0) {
+            console.log("🔍 All available keys in record:", Object.keys(record));
+            console.log("🔍 P.I Copy value from record:", record['P.I Copy'], record['PI Copy'], record.pICopy, record.piCopy);
+        }
+        
+        // Map all columns with fallbacks - IMPORTANT: Use bracket notation for keys with dots/spaces
+        const data = {
+            rowIndex: record.rowIndex || index + 2,
+            timestamp: record.timestamp || record.Timestamp || '',
+            
+            // Main PI fields
+            piNo: record.piNo || record['PI-No.'] || record.pINo || '',
+            indentNo: record.indentNo || record['Indent No.'] || record.indentNumber || '',
+            partyName: record.partyName || record['Party Name'] || '',
+            productName: record.productName || record['Product Name'] || '',
+            qty: parseFloat(record.qty || record.Qty || 0),
+            piAmount: parseFloat(record.piAmount || record['P.I Amount'] || record.pIAmount || 0),
+            
+            // IMPORTANT: Try multiple variations for PI Copy
+            piCopy: record['P.I Copy'] || record['P.I Copy '] || record['PI Copy'] || record.piCopy || record.pICopy || '',
+            
+            poRateWithoutTax: parseFloat(record.poRateWithoutTax || record['Po Rate Without Tax'] || 0),
+            
+            // PO Master fields
+            poNumber: record.poNumber || record['PO Number'] || '',
+            deliveryDate: record.deliveryDate || record['Delivery Date'] || '',
+            paymentTerms: record.paymentTerms || record['Payment Terms'] || '',
+            internalCode: record.internalCode || record['Internal Code'] || '',
+            totalPoAmount: parseFloat(record.totalPoAmount || record['Total PO Amount'] || 0),
+            
+            // Try multiple variations for PO Copy
+            poCopy: record.poCopy || record['PO Copy'] || record['Po Copy'] || '',
+            
+            numberOfDays: parseInt(record.numberOfDays || record['Number Of Days'] || 0),
+            
+            // Payment fields
+            totalPaidAmount: parseFloat(record.totalPaidAmount || record['Total Paid Amount'] || 0),
+            outstandingAmount: parseFloat(record.outstandingAmount || record['Outstanding Amount'] || 0),
+            
+            // Status and date fields
+            status: record.status || record.Status || '', // First Status column
+            planned: record.planned || record.Planned || '',
+            actual: record.actual || record.Actual || '',
+            delay: record.delay || record.Delay || '',
+            status2: record.status2 || record['Status_2'] || record.Status2 || '', // Second Status column
+            paymentForm: record.paymentForm || record['Payment Form'] || '',
+        };
+
+        if (index < 3) {
+            console.log(`📝 Processed data ${index}:`, {
+                indentNo: data.indentNo,
+                piCopy: data.piCopy,
+                poCopy: data.poCopy,
+                planned: data.planned,
+                actual: data.actual
+            });
+        }
+        
+        return data as PIApprovalSheet;
     });
 
-       const filteredData = piApprovalData.filter((record: PIApprovalSheet) => 
-        record.timestamp || 
-        record.piNo || 
-        record.indentNo || 
-        record.partyName
+    // Filter out empty records
+    const filteredData = piApprovalData.filter((record: PIApprovalSheet) => 
+        record.indentNo && record.indentNo.trim() !== ''
     );
 
     console.log(`✅ Processed ${filteredData.length} PI Approval records`);
+    console.log('Sample records (first 3):', filteredData.slice(0, 3));
+    
     return filteredData;
 }
+
 
     if (sheetName === 'MASTER') {
         const data = raw.options;

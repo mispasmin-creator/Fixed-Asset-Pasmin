@@ -99,25 +99,36 @@ export type IndentSheet = {
 };
 
 // ✅ IMPROVED: Better field naming consistency
+// Update PIApprovalSheet type with all fields from your image
+// Update PIApprovalSheet type with all your columns
 export type PIApprovalSheet = {
     rowIndex?: number;
     timestamp: string;
-    piNo: string;                    // Maps to "PI-No."
-    indentNo: string;                // Maps to "Indent No."
-    partyName: string;               // Maps to "Party Name"
-    productName: string;             // Maps to "Product Name"
-    qty: number;                     // Maps to "Qty"
-    piAmount: number;                // Maps to "P.I Amount"
-    piCopy: string;                  // Maps to "P.I Copy" (URL to uploaded file)
-    poRateWithoutTax: number;        // Maps to "Po Rate Without Tax"
-    planned: string;                 // Maps to "Planned"
-    actual: string;                  // Maps to "Actual"
-    delay: string;                   // Maps to "Delay"
-    status: string;                  // Maps to "Status"
-    approvalAmount: number;          // Maps to "Approval Amoount" (note the typo in sheet)
+    piNo: string;                    // PI-No.
+    indentNo: string;                // Indent No.
+    partyName: string;               // Party Name
+    productName: string;             // Product Name
+    qty: number;                     // Qty
+    piAmount: number;                // P.I Amount
+    piCopy: string;                  // P.I Copy
+    poRateWithoutTax: number;        // Po Rate Without Tax
+    poNumber: string;                // PO Number
+    deliveryDate: string;            // Delivery Date
+    paymentTerms: string;            // Payment Terms
+    internalCode: string;            // Internal Code
+    totalPoAmount: number;           // Total PO Amount
+    poCopy: string;                  // Po Copy
+    numberOfDays: number;            // Number Of Days
+    totalPaidAmount: number;         // Total Paid Amount
+    outstandingAmount: number;       // Outstanding Amount
+    status: string;                  // First Status column
+    planned: string;                 // Planned
+    actual: string;                  // Actual
+    delay: string;                   // Delay
+    status2: string;                 // Second Status column (you have two Status columns)
+    paymentForm: string;             // Payment Form
 };
 
-// ✅ IMPROVED: Standardized field names
 export type PaymentHistory = {
     timestamp: string;
     apPaymentNumber: string;         // Standardized to camelCase

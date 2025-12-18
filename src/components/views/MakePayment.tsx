@@ -1,91 +1,173 @@
-
 import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
 import { Button } from '../ui/button';
-import { DollarSign, CreditCard, Building, Package, FileText, Truck, AlertCircle } from 'lucide-react';
+import { DollarSign, CreditCard, Building, FileText, ExternalLink, CheckCircle, Clock, AlertCircle, Calendar } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { Separator } from '../ui/separator';
 
 interface MakePaymentData {
     indentNo: string;
-    billNo: string;
-    vendorName: string;
+    partyName: string;
     productName: string;
     qty: number;
-    billAmount: number;
-    advanceAmount: number;
-    paymentType: string;
+    piAmount: number;
+    piCopy: string;
+    poRateWithoutTax: number;
+    poNumber: string;
+    deliveryDate: string;
+    paymentTerms: string;
+    internalCode: string;
+    totalPoAmount: number;
+    poCopy: string;
+    numberOfDays: number;
+    totalPaidAmount: number;
+    outstandingAmount: number;
+    status: string;
+    status1?: string;  // ✅ Add this line
+    planned: string;
+    actual: string;
+    delay: string;
+    paymentFormLink: string;
     firmNameMatch: string;
-    makePaymentLink: string;
+    rowIndex?: number;
+    sheetName?: string;
 }
 
-interface StoreInItem {
+interface PIApprovalItem {
+    timestamp?: string;
+    piNo?: string;
     indentNo?: string;
-    billNo?: string;
-    billAmount?: number;
-}
-
-interface IndentSheetItem {
-    firmNameMatch?: string;
-    indentNumber?: string;
-    planned7?: any;
-    actual7?: any;
-    makePaymentLink?: any;
-    approvedVendorName?: string;
-    vendorName1?: string;
+    partyName?: string;
     productName?: string;
-    quantity?: number;
-    paymentType?: string;
+    qty?: number;
+    piAmount?: number;
+    piCopy?: string;
+    poRateWithoutTax?: number;
+    poNumber?: string;
+    deliveryDate?: string;
+    paymentTerms?: string;
+    internalCode?: string;
+    totalPoAmount?: number;
+    poCopy?: string;
+    numberOfDays?: number;
+    totalPaidAmount?: number;
+    outstandingAmount?: number;
+    status?: string;
+    planned?: string;
+    actual?: string;
+    delay?: string;
+    paymentForm?: string;
+    firmNameMatch?: string;
+    rowIndex?: number;
+    sheetName?: string;
 }
 
-// Add interface for Payment History item
 interface PaymentHistoryItem {
     uniqueNumber?: string;
     status?: string;
-    // Add other fields if needed
 }
 
+// Helper function to format date from various formats to DD/MM/YYYY
+const formatDate = (dateString: string): string => {
+    if (!dateString || dateString.trim() === '' || dateString === 'N/A' || dateString === 'null' || dateString === 'undefined') {
+        return 'N/A';
+    }
+    
+    try {
+        // Remove any whitespace
+        const cleanDate = dateString.toString().trim();
+        
+        // Check if it's already in DD/MM/YYYY format
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleanDate)) {
+            return cleanDate;
+        }
+        
+        // Check if it's in YYYY-MM-DD format (from Google Sheets)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+            const [year, month, day] = cleanDate.split('-');
+            return `${day}/${month}/${year}`;
+        }
+        
+        // Check if it's in MM/DD/YYYY format
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleanDate)) {
+            const parts = cleanDate.split('/');
+            if (parts.length === 3) {
+                const [month, day, year] = parts;
+                return `${day}/${month}/${year}`;
+            }
+        }
+        
+        // Try parsing as Date object (for ISO string or other formats)
+        const date = new Date(cleanDate);
+        if (!isNaN(date.getTime())) {
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+        
+        // Return original if can't parse
+        return cleanDate;
+    } catch (error) {
+        console.error('Error formatting date:', dateString, error);
+        return dateString;
+    }
+};
+
 export default function MakePayment() {
-    const { indentSheet, indentLoading, storeInSheet, paymentHistorySheet } = useSheets();
+    const { piApprovalSheet, paymentHistorySheet, updateSheet } = useSheets();
     const [tableData, setTableData] = useState<MakePaymentData[]>([]);
     const { user } = useAuth();
+    const [isUpdating, setIsUpdating] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [debugInfo, setDebugInfo] = useState('');
 
     const [stats, setStats] = useState({
         total: 0,
-        totalBillAmount: 0,
-        totalAdvanceAmount: 0
+        totalPiAmount: 0,
+        totalPoAmount: 0,
+        totalOutstanding: 0
     });
 
-    // Filter data and merge with STORE IN sheet
+    // Debug: Check if updateSheet function exists
     useEffect(() => {
-        const filteredByFirm = indentSheet.filter((sheet: IndentSheetItem) =>
-            user.firmNameMatch.toLowerCase() === "all" || sheet.firmNameMatch === user.firmNameMatch
-        );
+        console.log('DEBUG - Available functions:', {
+            updateSheetExists: !!updateSheet,
+            updateSheetType: typeof updateSheet,
+            piApprovalSheetLength: Array.isArray(piApprovalSheet) ? piApprovalSheet.length : 0,
+        });
+    }, [updateSheet, piApprovalSheet]);
 
-        // Create a map of STORE IN data by indent number for quick lookup
-        const storeInMap = new Map(
-            storeInSheet.map((item: StoreInItem) => [
-                item.indentNo,
-                {
-                    billNo: item.billNo || '',
-                    billAmount: item.billAmount || 0,
-                    advanceAmount: Number((item as any).advanceAmountIfAny) || 0,
-                }
-            ])
-        );
+    // Filter data from PI APPROVAL sheet
+    useEffect(() => {
+        console.log('PI APPROVAL Sheet Data:', piApprovalSheet);
+        console.log('Payment History Sheet Data:', paymentHistorySheet);
+        console.log('User Firm:', user.firmNameMatch);
+
+        if (!piApprovalSheet || !Array.isArray(piApprovalSheet)) {
+            console.log('PI APPROVAL sheet is empty or not an array');
+            setTableData([]);
+            setLoading(false);
+            return;
+        }
+
+        // Filter by firm
+        const filteredByFirm = piApprovalSheet.filter((sheet: PIApprovalItem) => {
+            const firmMatch = sheet.firmNameMatch || '';
+            return user.firmNameMatch.toLowerCase() === "all" || firmMatch === user.firmNameMatch;
+        });
+
+        console.log('Filtered by firm:', filteredByFirm.length);
 
         // Create a Set of paid indent numbers from Payment History
         const paidIndentNumbers = new Set();
         
-        // Process Payment History sheet
         if (paymentHistorySheet && Array.isArray(paymentHistorySheet)) {
             paymentHistorySheet.forEach((item: PaymentHistoryItem) => {
                 if (item.uniqueNumber) {
-                    // Add the Unique Number to the set of paid indents
                     paidIndentNumbers.add(item.uniqueNumber.trim());
                 }
             });
@@ -93,85 +175,221 @@ export default function MakePayment() {
         
         console.log('Paid indent numbers from Payment History:', Array.from(paidIndentNumbers));
 
+        // Process PI APPROVAL data
         const processedData = filteredByFirm
-            .filter((sheet: IndentSheetItem) => {
-                const indentNumber = sheet.indentNumber?.trim();
+            .filter((sheet: PIApprovalItem) => {
+                const indentNumber = sheet.indentNo?.toString().trim() || '';
                 
                 // Check if indent number exists and is not already paid
                 const isAlreadyPaid = indentNumber ? paidIndentNumbers.has(indentNumber) : false;
                 
-                // Debug log
-                if (indentNumber) {
-                    console.log(`Indent ${indentNumber}: isAlreadyPaid=${isAlreadyPaid}, planned7="${sheet.planned7}", actual7="${sheet.actual7}"`);
-                }
+                // Check Planned and Actual conditions from PI APPROVAL sheet
+                const plannedValue = sheet.planned?.toString().trim() || '';
+                const actualValue = sheet.actual?.toString().trim() || '';
                 
-                // Show only if NOT already paid AND has planned7 value
-                const planned7HasValue = sheet.planned7 && sheet.planned7.toString().trim() !== '';
-                return !isAlreadyPaid && planned7HasValue;
+                const hasPlanned = plannedValue !== '' && plannedValue !== 'N/A' && plannedValue !== 'null' && plannedValue !== 'undefined';
+                const hasActual = actualValue !== '' && actualValue !== 'N/A' && actualValue !== 'null' && actualValue !== 'undefined';
+                
+                // Check if payment form exists
+                const hasPaymentForm = sheet.paymentForm?.toString().trim() !== '' && 
+                                      sheet.paymentForm?.toString().trim() !== 'N/A';
+                
+                const shouldShow = !isAlreadyPaid && hasPlanned && !hasActual && hasPaymentForm;
+                
+                console.log(`Indent ${indentNumber}:`, {
+                    isAlreadyPaid,
+                    planned: plannedValue,
+                    actual: actualValue,
+                    hasPlanned,
+                    hasActual,
+                    hasPaymentForm,
+                    shouldShow
+                });
+                
+                return shouldShow;
             })
-            .map((sheet: IndentSheetItem) => {
-                const billData = storeInMap.get(sheet.indentNumber) || { 
-                    billNo: '', 
-                    billAmount: 0,
-                    advanceAmount: 0
-                };
+            .map((sheet: PIApprovalItem) => {
+                // Format dates
+                const formattedDeliveryDate = formatDate(sheet.deliveryDate || '');
+                const formattedPlannedDate = formatDate(sheet.planned || '');
+                const formattedActualDate = formatDate(sheet.actual || '');
                 
                 return {
-                    indentNo: sheet.indentNumber || '',
-                    billNo: billData.billNo,
-                    vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
-                    productName: sheet.productName || '',
-                    qty: sheet.quantity || 0,
-                    billAmount: billData.billAmount,
-                    advanceAmount: billData.advanceAmount,
-                    paymentType: sheet.paymentType || '',
-                    firmNameMatch: sheet.firmNameMatch || '',
-                    makePaymentLink: sheet.makePaymentLink?.toString() || '',
-                };
+                    indentNo: sheet.indentNo?.toString().trim() || '',
+                    partyName: sheet.partyName?.toString().trim() || '',
+                    productName: sheet.productName?.toString().trim() || '',
+                    qty: Number(sheet.qty) || 0,
+                    piAmount: Number(sheet.piAmount) || 0,
+                    piCopy: sheet.piCopy?.toString().trim() || '',
+                    poRateWithoutTax: Number(sheet.poRateWithoutTax) || 0,
+                    poNumber: sheet.poNumber?.toString().trim() || '',
+                    deliveryDate: formattedDeliveryDate,
+                    paymentTerms: sheet.paymentTerms?.toString().trim() || '',
+                    internalCode: sheet.internalCode?.toString().trim() || '',
+                    totalPoAmount: Number(sheet.totalPoAmount) || 0,
+                    poCopy: sheet.poCopy?.toString().trim() || '',
+                    numberOfDays: Number(sheet.numberOfDays) || 0,
+                    totalPaidAmount: Number(sheet.totalPaidAmount) || 0,
+                    outstandingAmount: Number(sheet.outstandingAmount) || 0,
+                    status: sheet.status?.toString().trim() || 'Pending',
+                    planned: formattedPlannedDate,
+                    actual: formattedActualDate,
+                    delay: sheet.delay?.toString().trim() || '',
+                    paymentFormLink: sheet.paymentForm?.toString().trim() || '',
+                    firmNameMatch: sheet.firmNameMatch?.toString().trim() || '',
+                    rowIndex: sheet.rowIndex,
+                    sheetName: sheet.sheetName || 'PI APPROVAL',
+                } as MakePaymentData;
             })
             .sort((a, b) => b.indentNo.localeCompare(a.indentNo));
 
-        console.log('Processed data count:', processedData.length);
+        console.log('Final processed table data:', processedData);
+        console.log('Number of items to display:', processedData.length);
+        
         setTableData(processedData);
 
         // Calculate stats
-        const totalBillAmount = processedData.reduce((sum, item) => sum + item.billAmount, 0);
-        const totalAdvanceAmount = processedData.reduce((sum, item) => sum + item.advanceAmount, 0);
+        const totalPiAmount = processedData.reduce((sum, item) => sum + item.piAmount, 0);
+        const totalPoAmount = processedData.reduce((sum, item) => sum + item.totalPoAmount, 0);
+        const totalOutstanding = processedData.reduce((sum, item) => sum + item.outstandingAmount, 0);
 
         setStats({
             total: processedData.length,
-            totalBillAmount,
-            totalAdvanceAmount
+            totalPiAmount,
+            totalPoAmount,
+            totalOutstanding
         });
 
-    }, [indentSheet, storeInSheet, paymentHistorySheet, user.firmNameMatch]);
+        // Set debug info
+        setDebugInfo(`Found ${processedData.length} items from ${filteredByFirm.length} filtered items (Total PI APPROVAL: ${piApprovalSheet.length})`);
+        setLoading(false);
+    }, [piApprovalSheet, paymentHistorySheet, user.firmNameMatch]);
 
-    // Handle Make Payment button click - Open specific Google Form link
-    const handleMakePayment = (item: MakePaymentData) => {
-        if (item.makePaymentLink) {
-            // Open the specific Google Form link in new tab
-            window.open(item.makePaymentLink, '_blank');
+    // Handle Make Payment button click
+    // Handle Make Payment button click
+const handleMakePayment = async (item: MakePaymentData) => {
+    if (!item.paymentFormLink || item.paymentFormLink === 'N/A') {
+        alert("No payment link available for this item.");
+        return;
+    }
+
+    setIsUpdating(item.indentNo);
+    try {
+        // Format current date as DD/MM/YYYY
+        const today = new Date();
+        const day = today.getDate().toString().padStart(2, '0');
+        const month = (today.getMonth() + 1).toString().padStart(2, '0');
+        const year = today.getFullYear();
+        const currentDate = `${day}/${month}/${year}`;
+        
+        // ✅ CHANGED: Update Status1 and Actual columns
+        const updateData = {
+            actual: currentDate,
+            status1: "ok"  // ✅ Changed from "status" to "status1"
+        };
+
+        console.log('Updating PI APPROVAL sheet row:', {
+            sheetName: 'PI APPROVAL',
+            rowIndex: item.rowIndex,
+            indentNo: item.indentNo,
+            updateData
+        });
+
+        // Check if updateSheet function exists
+        if (!updateSheet) {
+            console.error('updateSheet function is undefined');
+            alert("Update function not available. Please refresh the page.");
+            setIsUpdating(null);
+            return;
+        }
+
+        // Check if rowIndex is valid
+        if (!item.rowIndex || item.rowIndex < 7) { // Row 7 is where data starts (header at row 6 + 1)
+            console.error('Invalid rowIndex:', item.rowIndex);
+            alert(`Cannot update: Invalid row index (${item.rowIndex}). Please contact support.`);
+            setIsUpdating(null);
+            return;
+        }
+
+        console.log('Calling updateSheet function...');
+        const result = await updateSheet('PI APPROVAL', item.rowIndex, updateData);
+        
+        console.log('Update result:', result);
+        
+        if (result && result.success) {
+            // Remove the item from table immediately
+            setTableData(prev => prev.filter(data => data.indentNo !== item.indentNo));
+            
+            // Update stats
+            setStats(prev => ({
+                ...prev,
+                total: prev.total - 1,
+                totalPiAmount: prev.totalPiAmount - item.piAmount,
+                totalPoAmount: prev.totalPoAmount - item.totalPoAmount,
+                totalOutstanding: prev.totalOutstanding - item.outstandingAmount
+            }));
+            
+            // ✅ Open payment form immediately after successful update
+            window.open(item.paymentFormLink, '_blank');
+            
+            // Show success message
+            alert("✅ Payment status updated successfully! Payment form opened in new tab.");
         } else {
-            console.warn('No payment link available for indent:', item.indentNo);
+            console.error('Update failed:', result?.error);
+            alert(`⚠️ Status update failed: ${result?.error || 'Unknown error'}. Please try again.`);
+        }
+
+    } catch (error: any) {
+        console.error('Error updating payment status:', error);
+        alert(`❌ Failed to update payment status: ${error.message || 'Unknown error'}`);
+    } finally {
+        setIsUpdating(null);
+    }
+};
+
+    // Function to handle file link clicks
+    const handleFileLinkClick = (url: string, type: 'PI' | 'PO') => {
+        if (!url || url === 'N/A' || url === '') {
+            alert(`No ${type} copy available`);
+            return;
+        }
+        
+        // Check if URL is valid
+        if (url.startsWith('http') || url.startsWith('https')) {
+            window.open(url, '_blank');
+        } else {
+            // If it's not a full URL, it might be a Google Drive file ID or path
+            alert(`Please check the ${type} copy link: ${url}`);
         }
     };
 
-    // Table columns
+    // Table columns with all required fields
     const columns: ColumnDef<MakePaymentData>[] = [
         {
             header: 'Action',
             cell: ({ row }: { row: Row<MakePaymentData> }) => {
                 const item = row.original;
+                const isUpdatingThisItem = isUpdating === item.indentNo;
+                
                 return (
                     <Button
                         variant="default"
                         size="sm"
                         onClick={() => handleMakePayment(item)}
-                        disabled={!item.makePaymentLink}
-                        className="bg-green-600 hover:bg-green-700 shadow-sm"
+                        disabled={!item.paymentFormLink || isUpdatingThisItem}
+                        className={`${isUpdatingThisItem ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} shadow-sm transition-colors`}
                     >
-                        <CreditCard className="mr-2 h-3 w-3" />
-                        Make Payment
+                        {isUpdatingThisItem ? (
+                            <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                                Updating...
+                            </>
+                        ) : (
+                            <>
+                                <CreditCard className="mr-2 h-3 w-3" />
+                                Make Payment
+                            </>
+                        )}
                     </Button>
                 );
             },
@@ -180,7 +398,12 @@ export default function MakePayment() {
             accessorKey: 'indentNo', 
             header: 'Indent No.',
             cell: ({ row }) => (
-                <span className="font-medium text-blue-700">{row.original.indentNo}</span>
+                <div className="flex flex-col">
+                    <span className="font-medium text-blue-700">{row.original.indentNo}</span>
+                    {row.original.rowIndex && (
+                        <span className="text-xs text-gray-500">Row: {row.original.rowIndex}</span>
+                    )}
+                </div>
             )
         },
         { 
@@ -194,17 +417,10 @@ export default function MakePayment() {
             )
         },
         { 
-            accessorKey: 'billNo', 
-            header: 'Bill No.',
+            accessorKey: 'partyName', 
+            header: 'Party Name',
             cell: ({ row }) => (
-                <span className="font-medium">{row.original.billNo || 'N/A'}</span>
-            )
-        },
-        { 
-            accessorKey: 'vendorName', 
-            header: 'Vendor',
-            cell: ({ row }) => (
-                <span className="font-medium">{row.original.vendorName}</span>
+                <span className="font-medium">{row.original.partyName}</span>
             )
         },
         { 
@@ -224,28 +440,122 @@ export default function MakePayment() {
             )
         },
         {
-            accessorKey: 'billAmount',
-            header: 'Bill Amount',
+            accessorKey: 'piAmount',
+            header: 'P.I Amount',
             cell: ({ row }) => (
-                <span className="font-semibold text-red-600">₹{row.original.billAmount?.toLocaleString('en-IN')}</span>
+                <span className="font-semibold text-purple-600">₹{row.original.piAmount?.toLocaleString('en-IN')}</span>
             ),
         },
         {
-            accessorKey: 'advanceAmount',
-            header: 'Advance',
+            accessorKey: 'totalPoAmount',
+            header: 'Total PO Amount',
             cell: ({ row }) => (
-                <span className="font-semibold text-amber-600">₹{row.original.advanceAmount?.toLocaleString('en-IN')}</span>
+                <span className="font-semibold text-green-600">₹{row.original.totalPoAmount?.toLocaleString('en-IN')}</span>
             ),
         },
         { 
-            accessorKey: 'paymentType', 
-            header: 'Payment Type',
+            accessorKey: 'outstandingAmount', 
+            header: 'Outstanding',
+            cell: ({ row }) => (
+                <span className="font-semibold text-red-600">₹{row.original.outstandingAmount?.toLocaleString('en-IN')}</span>
+            )
+        },
+        { 
+            accessorKey: 'piCopy', 
+            header: 'P.I Copy',
             cell: ({ row }) => {
-                const type = row.original.paymentType;
+                const piCopy = row.original.piCopy;
+                return piCopy && piCopy !== 'N/A' && piCopy !== '' ? (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleFileLinkClick(piCopy, 'PI')}
+                        className="h-8 px-2 text-blue-600 hover:text-blue-800"
+                    >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        View PI
+                    </Button>
+                ) : (
+                    <span className="text-gray-400 text-sm">N/A</span>
+                );
+            }
+        },
+        { 
+            accessorKey: 'poCopy', 
+            header: 'PO Copy',
+            cell: ({ row }) => {
+                const poCopy = row.original.poCopy;
+                return poCopy && poCopy !== 'N/A' && poCopy !== '' ? (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleFileLinkClick(poCopy, 'PO')}
+                        className="h-8 px-2 text-green-600 hover:text-green-800"
+                    >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        View PO
+                    </Button>
+                ) : (
+                    <span className="text-gray-400 text-sm">N/A</span>
+                );
+            }
+        },
+        { 
+            accessorKey: 'paymentTerms', 
+            header: 'Payment Terms',
+            cell: ({ row }) => {
+                const type = row.original.paymentTerms;
                 const isAdvance = type?.toLowerCase().includes('advance');
                 return (
                     <Badge variant={isAdvance ? "default" : "outline"} className={isAdvance ? "bg-amber-100 text-amber-800" : ""}>
                         {type || 'N/A'}
+                    </Badge>
+                );
+            }
+        },
+        { 
+            accessorKey: 'deliveryDate', 
+            header: 'Delivery Date',
+            cell: ({ row }) => (
+                <Badge variant="outline" className="bg-gray-50">
+                    <Calendar className="mr-1 h-3 w-3" />
+                    {row.original.deliveryDate}
+                </Badge>
+            )
+        },
+        { 
+            accessorKey: 'planned', 
+            header: 'Planned Date',
+            cell: ({ row }) => (
+                <Badge variant="outline" className="bg-blue-50">
+                    <Clock className="mr-1 h-3 w-3" />
+                    {row.original.planned}
+                </Badge>
+            )
+        },
+        { 
+            accessorKey: 'poNumber', 
+            header: 'PO Number',
+            cell: ({ row }) => (
+                <span className="font-medium text-blue-600">{row.original.poNumber || 'N/A'}</span>
+            )
+        },
+        { 
+            accessorKey: 'internalCode', 
+            header: 'Internal Code',
+            cell: ({ row }) => (
+                <span className="font-medium text-gray-700">{row.original.internalCode || 'N/A'}</span>
+            )
+        },
+        { 
+            accessorKey: 'status', 
+            header: 'Status',
+            cell: ({ row }) => {
+                const status = row.original.status;
+                const isOk = status?.toLowerCase() === 'ok';
+                return (
+                    <Badge variant={isOk ? "default" : "outline"} className={isOk ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
+                        {status || 'Pending'}
                     </Badge>
                 );
             }
@@ -259,16 +569,16 @@ export default function MakePayment() {
                 <div className="mb-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-3 bg-green-600 rounded-lg shadow">
-                            <DollarSign size={28} className="text-white" />
+                            <CreditCard size={28} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Make Payment </h1>
-                            <p className="text-gray-600">Process and manage advance payments for purchase orders</p>
+                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Make Payment</h1>
+                            <p className="text-gray-600">Process payments from PI APPROVAL sheet based on planned dates</p>
                         </div>
                     </div>
 
                     {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
@@ -276,7 +586,7 @@ export default function MakePayment() {
                                         <p className="text-sm font-medium text-gray-600">Pending Payments</p>
                                         <p className="text-2xl font-bold text-gray-800 mt-1">{stats.total}</p>
                                     </div>
-                                    <CreditCard className="h-10 w-10 text-green-500" />
+                                    <Clock className="h-10 w-10 text-blue-500" />
                                 </div>
                             </CardContent>
                         </Card>
@@ -285,10 +595,10 @@ export default function MakePayment() {
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="text-sm font-medium text-gray-600">Total Bill Amount</p>
-                                        <p className="text-2xl font-bold text-red-600 mt-1">₹{stats.totalBillAmount.toLocaleString('en-IN')}</p>
+                                        <p className="text-sm font-medium text-gray-600">Total P.I Amount</p>
+                                        <p className="text-2xl font-bold text-purple-600 mt-1">₹{stats.totalPiAmount.toLocaleString('en-IN')}</p>
                                     </div>
-                                    <FileText className="h-10 w-10 text-red-500" />
+                                    <FileText className="h-10 w-10 text-purple-500" />
                                 </div>
                             </CardContent>
                         </Card>
@@ -297,10 +607,22 @@ export default function MakePayment() {
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="text-sm font-medium text-gray-600">Total Advance Amount</p>
-                                        <p className="text-2xl font-bold text-amber-600 mt-1">₹{stats.totalAdvanceAmount.toLocaleString('en-IN')}</p>
+                                        <p className="text-sm font-medium text-gray-600">Total PO Amount</p>
+                                        <p className="text-2xl font-bold text-green-600 mt-1">₹{stats.totalPoAmount.toLocaleString('en-IN')}</p>
                                     </div>
-                                    <DollarSign className="h-10 w-10 text-amber-500" />
+                                    <DollarSign className="h-10 w-10 text-green-500" />
+                                </div>
+                            </CardContent>
+                        </Card>
+                        
+                        <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
+                            <CardContent className="p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-600">Total Outstanding</p>
+                                        <p className="text-2xl font-bold text-red-600 mt-1">₹{stats.totalOutstanding.toLocaleString('en-IN')}</p>
+                                    </div>
+                                    <AlertCircle className="h-10 w-10 text-red-500" />
                                 </div>
                             </CardContent>
                         </Card>
@@ -312,39 +634,82 @@ export default function MakePayment() {
                     <CardHeader className="pb-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle className="text-xl font-bold text-gray-800">Pending Payments</CardTitle>
-                                <p className="text-gray-600 text-sm mt-1">Click "Make Payment" to process payments via Google Forms</p>
+                                <CardTitle className="text-xl font-bold text-gray-800">Pending Payments </CardTitle>
+                                
                             </div>
                             {stats.total === 0 ? (
                                 <Badge variant="outline" className="bg-green-50 text-green-700">
-                                    <AlertCircle className="mr-1 h-3 w-3" />
+                                    <CheckCircle className="mr-1 h-3 w-3" />
                                     All Payments Processed
                                 </Badge>
                             ) : (
                                 <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                                    <Clock className="mr-1 h-3 w-3" />
                                     {stats.total} Payments Pending
                                 </Badge>
                             )}
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {tableData.length > 0 ? (
-                            <DataTable
-                                data={tableData}
-                                columns={columns}
-                                searchFields={['indentNo', 'billNo', 'vendorName', 'productName', 'firmNameMatch', 'paymentType']}
-                                dataLoading={indentLoading}
-                                className="border rounded-lg"
-                            />
+                        {loading ? (
+                            <div className="text-center py-12">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                                <p className="text-gray-600">Loading PI APPROVAL data...</p>
+                            </div>
+                        ) : tableData.length > 0 ? (
+                            <div>
+                                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                                    
+                                </div>
+                                <DataTable
+                                    data={tableData}
+                                    columns={columns}
+                                    searchFields={['indentNo', 'partyName', 'productName', 'poNumber', 'paymentTerms', 'firmNameMatch', 'internalCode']}
+                                    dataLoading={false}
+                                    className="border rounded-lg"
+                                />
+                            </div>
                         ) : (
                             <div className="text-center py-12">
-                                <CreditCard className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-lg font-semibold text-gray-700 mb-2">No Pending Payments</h3>
-                                <p className="text-gray-500">All payments have been processed successfully.</p>
+                                <CheckCircle className="h-16 w-16 text-green-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-semibold text-gray-700 mb-2">No Pending Payments Found</h3>
+                                <p className="text-gray-500 mb-4">All PI payments have been processed or no payments meet the criteria.</p>
+                                <div className="mt-6 text-sm text-gray-600 max-w-md mx-auto bg-gray-50 p-4 rounded-lg">
+                                    <p className="font-medium mb-3 text-gray-800">📋 To appear in this list, PI APPROVAL items must:</p>
+                                    <ul className="list-disc list-inside text-left space-y-2">
+                                        <li>Have a <span className="font-medium">Planned</span> date set (not empty)</li>
+                                        <li>Have an <span className="font-medium">Actual</span> date empty</li>
+                                        <li>Have a <span className="font-medium">Payment Form</span> link (not empty)</li>
+                                        <li>Not be marked as paid in Payment History sheet</li>
+                                        <li>Match your firm filter: <span className="font-medium">{user.firmNameMatch === "all" ? "All firms" : user.firmNameMatch}</span></li>
+                                    </ul>
+                                    <div className="mt-4 p-3 bg-blue-50 rounded">
+                                        <p className="text-blue-700 text-sm">
+                                            <strong>Debug Info:</strong> Found {piApprovalSheet?.length || 0} rows in PI APPROVAL sheet
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </CardContent>
-                </Card>   
+                </Card>
+                
+                {/* Debug Section - Only show in development */}
+                {import.meta.env.DEV && (
+                    <Card className="bg-gray-50 border border-gray-200 mt-4">
+                        <CardHeader>
+                            <CardTitle className="text-sm font-medium text-gray-700">Debug Information</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-xs font-mono">
+                                <p>updateSheet function: {typeof updateSheet === 'function' ? '✅ Available' : '❌ Not available'}</p>
+                                <p>PI APPROVAL rows: {piApprovalSheet?.length || 0}</p>
+                                <p>Payment History rows: {paymentHistorySheet?.length || 0}</p>
+                                <p>Filtered rows: {stats.total}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
         </div>
     );

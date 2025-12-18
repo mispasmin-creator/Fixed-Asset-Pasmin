@@ -20,6 +20,7 @@ interface FreightPaymentData {
     rateType: string;
     amount1: number;
     biltyImage: string;
+    
     firmNameMatch: string;
     paymentForm: string;  // Contains the Google Form link
     fFPPaymentNumber: string;
@@ -366,16 +367,7 @@ export default function FreightPayment() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <p className="text-sm text-blue-800 flex items-center gap-2">
-                                <ExternalLink size={14} />
-                                <span>
-                                    <strong>Note:</strong> Click "Make Payment" to open the Google Form. 
-                                    The form URL is taken from the "Payment Form" column in your sheet.
-                                </span>
-                            </p>
-                        </div>
-                        
+                    
                         <DataTable
                             data={tableData}
                             columns={columns}

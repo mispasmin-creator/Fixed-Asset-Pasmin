@@ -31,7 +31,8 @@ interface SheetsState {
     updatePaymentHistorySheet: () => void;
     updatePIApprovalSheet: () => void;  // ✅ CORRECT
 
-    // Sheet data
+    updateSheet: (sheetName: string, rowIndex: number, updateData: any) => Promise<any>; // ✅ ADD THIS LINE
+
     sheets: StoreInSheet[];
     indentSheet: IndentSheet[];
     storeInSheet: StoreInSheet[];
@@ -210,6 +211,41 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             .catch((err) => console.error('Error fetching PC REPORT:', err));
     }
 
+    // Add this new function after updatePcReportSheet()
+async function updateSheet(sheetName: string, rowIndex: number, updateData: any) {
+    try {
+        console.log('🔄 updateSheet called:', { sheetName, rowIndex, updateData });
+        
+        const scriptUrl = import.meta.env.VITE_APP_SCRIPT_URL;
+        
+        const formData = new FormData();
+        formData.append('action', 'update');
+        formData.append('sheetName', sheetName);
+        formData.append('rows', JSON.stringify([{ ...updateData, rowIndex }]));
+        
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: formData,
+        });
+        
+        const result = await response.json();
+        console.log('📨 Update result:', result);
+        
+        if (result.success) {
+            // Refresh the PI Approval sheet after successful update
+            updatePIApprovalSheet();
+            toast.success('PI APPROVAL sheet updated successfully');
+        } else {
+            toast.error(result.error || 'Failed to update sheet');
+        }
+        
+        return result;
+    } catch (error: any) {
+        console.error('❌ Error in updateSheet:', error);
+        toast.error('Network error while updating sheet');
+        return { success: false, error: error.message };
+    }
+}
     function updateAll() {
         setAllLoading(true);
         updateMasterSheet();
@@ -251,6 +287,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                 updateFullkittingSheet,
                 updatePaymentHistorySheet,
                 updatePIApprovalSheet,  // ✅ CORRECT
+                 updateSheet, // ✅ ADD THIS LINE
 
                 // Sheet data
                 sheets,

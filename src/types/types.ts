@@ -14,23 +14,33 @@ export interface PaymentHistory {
 // ✅ PI APPROVAL - CORRECT
 export type PIApprovalSheet = {
     rowIndex?: number;
+    sheetName?: string;
     timestamp: string;
-    piNo: string;
-    indentNo: string;
-    partyName: string;
-    productName: string;
-    qty: number;
-    piAmount: number;
-    piCopy: string;
-    poRateWithoutTax: number;
-    planned: string;
-    actual: string;
-    delay: string;
-    status: string;
-    approvalAmount: number;
-    record:any;
+    piNo: string;                    // PI-No.
+    indentNo: string;                // Indent No.
+    partyName: string;               // Party Name
+    productName: string;             // Product Name
+    qty: number;                     // Qty
+    piAmount: number;                // P.I Amount
+    piCopy: string;                  // P.I Copy
+    poRateWithoutTax: number;        // PO Rate Without Tax
+    poNumber: string;                // PO Number
+    deliveryDate: string;            // Delivery Date
+    paymentTerms: string;            // Payment Terms
+    internalCode: string;            // Internal Code
+    totalPoAmount: number;           // Total PO Amount
+    poCopy: string;                  // PO Copy
+    numberOfDays: number;            // Number Of Days
+    totalPaidAmount: number;         // Total Paid Amount
+    outstandingAmount: number;       // Outstanding Amount
+    status: string;                  // Status (Column S)
+    planned: string;                 // Planned
+    actual: string;                  // Actual
+    delay: string;                   // Delay
+    status1: string;                 // Status1 (Column W - the one we update)
+    paymentForm: string;             // Payment Form
+    firmNameMatch?: string;          // Firm Name Match
 };
-
 // ✅ SHEET TYPE - CORRECT (but standardize casing)
 export type Sheet = 
   | 'MASTER' 

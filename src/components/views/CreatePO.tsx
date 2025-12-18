@@ -204,7 +204,7 @@ export default () => {
         deliveryDate: z.coerce.date(),
         deliveryDays: z.coerce.number().optional(),
         deliveryType: z.enum(['for', 'exfactory']).optional(),
-        paymentTerms: z.enum(['Party PI / Party Advance', 'Advance', 'After Delivery']),
+        paymentTerms: z.enum(['Party PI / Party Advance', 'Advance', 'After Delivery','Against PI']),
         numberOfDays: z.coerce.number().optional(),
     });
 
@@ -1014,6 +1014,7 @@ const itemsArray = useFieldArray({
                                                     <SelectItem value="Advance">Advance</SelectItem>
                                                     <SelectItem value="Party PI / Party Advance">Party PI / Party Advance</SelectItem>
                                                     <SelectItem value="After Delivery">After Delivery</SelectItem>
+                                                    {/* <SelectItem value="Against PI">After Delivery</SelectItem> */}
                                                 </SelectContent>
                                             </Select>
                                         </FormItem>

@@ -47,8 +47,20 @@ interface PIPendingData {
     deliveryDate: string;
     paymentTerms: string;
     firmNameMatch: string;
+    totalPaidAmount: number;
+    outstandingAmount: number;
+    status: string;
 }
-
+interface GroupedPIPendingData {
+    poNumber: string;
+    partyName: string;
+    firmNameMatch: string;
+    totalPoAmount: number;
+    paymentTerms: string;
+    itemCount: number;
+    firstItem?: PIPendingData;
+    isExpanded?: boolean;
+}
 interface POMasterRecord {
     rowIndex?: number;
     timestamp?: string;
@@ -93,6 +105,9 @@ interface POMasterRecord {
     piAmount?: string | number;
     piCopy?: string;
     poRateWithoutTax?: string | number;
+    totalPaidAmount?: string | number;
+    outstandingAmount?: string | number;
+    status?: string;
 }
 
 export default function PIApprovals() {
@@ -109,168 +124,255 @@ export default function PIApprovals() {
         pendingCount: 0
     });
 
-    useEffect(() => {
-        try {
-            const safePoMasterSheet: POMasterRecord[] = Array.isArray(poMasterSheet) ? poMasterSheet : [];
-            
-            // Filter by firm
-            const filteredByFirm = safePoMasterSheet.filter((sheet: POMasterRecord) =>
-                user?.firmNameMatch?.toLowerCase() === "all" ||
-                sheet?.firmNameMatch === user?.firmNameMatch
-            );
 
-            // Filter items that are NOT in PI Approval sheet yet
-            const approvedPONumbers = new Set(
-                (piApprovalSheet || []).map(pi => pi.piNo)
-            );
+    const groupItemsByPO = (items: PIPendingData[]): GroupedPIPendingData[] => {
+    const grouped: Record<string, GroupedPIPendingData> = {};
+    
+    items.forEach(item => {
+        const poNumber = item.poNumber || '';
+        
+        if (!grouped[poNumber]) {
+            grouped[poNumber] = {
+                poNumber: poNumber,
+                partyName: item.partyName || '',
+                firmNameMatch: item.firmNameMatch || '',
+                totalPoAmount: 0,
+                paymentTerms: item.paymentTerms || '',
+                itemCount: 0,
+                firstItem: item
+            };
+        }
+        
+        // Increment item count and sum amount
+        grouped[poNumber].itemCount++;
+        grouped[poNumber].totalPoAmount += item.totalPoAmount || 0;
+    });
+    
+    return Object.values(grouped);
+};
 
-            const pending = filteredByFirm
-                .filter((sheet: POMasterRecord) => 
-                    !approvedPONumbers.has(sheet?.poNumber || '')
-                )
-                .map((sheet: POMasterRecord) => ({
-                    rowIndex: sheet?.rowIndex || 0,
-                    timestamp: sheet?.timestamp || '',
-                    partyName: sheet?.partyName || '',
-                    poNumber: sheet?.poNumber || '',
-                    internalCode: sheet?.internalCode || '',
-                    product: sheet?.product || '',
-                    description: sheet?.description || '',
-                    quantity: Number(sheet?.quantity || 0),
-                    unit: sheet?.unit || '',
-                    rate: Number(sheet?.rate || 0),
-                    gstPercent: Number(sheet?.gstPercent || 0),
-                    discountPercent: Number(sheet?.discountPercent || 0),
-                    amount: Number(sheet?.amount || 0),
-                    totalPoAmount: Number(sheet?.totalPoAmount || 0),
-                    deliveryDate: sheet?.deliveryDate || '',
-                    paymentTerms: sheet?.paymentTerms || '',
-                    firmNameMatch: sheet?.firmNameMatch || '',
-                }));
+   useEffect(() => {
+    try {
+        const safePoMasterSheet: POMasterRecord[] = Array.isArray(poMasterSheet) ? poMasterSheet : [];
+        
+        // Filter by firm
+        const filteredByFirm = safePoMasterSheet.filter((sheet: POMasterRecord) =>
+            user?.firmNameMatch?.toLowerCase() === "all" ||
+            sheet?.firmNameMatch === user?.firmNameMatch
+        );
 
-            setPendingData(pending);
-            
-            // Calculate stats
-            const totalAmount = pending.reduce((sum, item) => sum + item.totalPoAmount, 0);
-            setStats({
-                total: pending.length,
-                totalAmount,
-                pendingCount: pending.length
+        // Filter items that are NOT in PI Approval sheet yet
+        const approvedPONumbers = new Set(
+            (piApprovalSheet || []).map(pi => pi.piNo)
+        );
+
+        const pendingItems = filteredByFirm
+            .filter((sheet: POMasterRecord) => 
+                !approvedPONumbers.has(sheet?.poNumber || '')
+            )
+            .map((sheet: POMasterRecord) => ({
+                rowIndex: sheet?.rowIndex || 0,
+                timestamp: sheet?.timestamp || '',
+                partyName: sheet?.partyName || '',
+                poNumber: sheet?.poNumber || '',
+                internalCode: sheet?.internalCode || '',
+                product: sheet?.product || '',
+                description: sheet?.description || '',
+                quantity: Number(sheet?.quantity || 0),
+                unit: sheet?.unit || '',
+                rate: Number(sheet?.rate || 0),
+                gstPercent: Number(sheet?.gstPercent || 0),
+                discountPercent: Number(sheet?.discountPercent || 0),
+                amount: Number(sheet?.amount || 0),
+                totalPoAmount: Number(sheet?.totalPoAmount || 0),
+                deliveryDate: sheet?.deliveryDate || '',
+                paymentTerms: sheet?.paymentTerms || '',
+                firmNameMatch: sheet?.firmNameMatch || '',
+                totalPaidAmount: Number(sheet?.totalPaidAmount || 0),
+                outstandingAmount: Number(sheet?.outstandingAmount || 0),
+                status: sheet?.status || 'Pending',
+            }))
+            // ✅ ADD THIS FILTER - Only show items with "Pending" status
+            .filter(item => {
+                const status = item.status?.toLowerCase() || '';
+                return status === 'pending' || status === '';
             });
 
-        } catch (error) {
-            console.error('❌ Error in PI Approvals useEffect:', error);
-            setPendingData([]);
-        }
-    }, [poMasterSheet, piApprovalSheet, user?.firmNameMatch]);
+        // Group by PO Number to get unique POs only
+        const uniquePOMap = new Map<string, PIPendingData>();
+        pendingItems.forEach(item => {
+            if (!uniquePOMap.has(item.poNumber)) {
+                uniquePOMap.set(item.poNumber, item);
+            }
+        });
+
+        const pending = Array.from(uniquePOMap.values());
+        setPendingData(pending);
+        
+        // Calculate stats
+        const totalAmount = pending.reduce((sum, item) => sum + item.totalPoAmount, 0);
+        setStats({
+            total: pending.length,
+            totalAmount,
+            pendingCount: pending.length
+        });
+
+    } catch (error) {
+        console.error('❌ Error in PI Approvals useEffect:', error);
+        setPendingData([]);
+    }
+}, [poMasterSheet, piApprovalSheet, user?.firmNameMatch]);
+
 
     const pendingColumns: ColumnDef<PIPendingData>[] = [
-        {
-            header: 'Action',
-            cell: ({ row }: { row: Row<PIPendingData> }) => (
-                <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => {
-                        setSelectedItem(row.original);
-                        setOpenDialog(true);
-                    }}
-                    className="bg-purple-600 hover:bg-purple-700 shadow-sm"
+    {
+        header: 'Action',
+        cell: ({ row }: { row: Row<PIPendingData> }) => (
+            <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                    setSelectedItem(row.original);
+                    setOpenDialog(true);
+                }}
+                className="bg-purple-600 hover:bg-purple-700 shadow-sm"
+            >
+                <FileText className="mr-2 h-3 w-3" />
+                PI Payment
+            </Button>
+        ),
+    },
+    {
+        accessorKey: 'poNumber',
+        header: 'PO Number',
+        cell: ({ row }) => (
+            <span className="font-medium text-purple-700">{row.original.poNumber || '-'}</span>
+        )
+    },
+    {
+        accessorKey: 'partyName',
+        header: 'Party Name',
+        cell: ({ row }) => (
+            <span className="font-medium">{row.original.partyName || '-'}</span>
+        )
+    },
+    {
+        accessorKey: 'internalCode',
+        header: 'Indent No.',
+        cell: ({ row }) => (
+            <Badge variant="outline" className="bg-gray-50">
+                {row.original.internalCode || '-'}
+            </Badge>
+        )
+    },
+    {
+        accessorKey: 'totalPoAmount',
+        header: 'Total PO Amount',
+        cell: ({ row }) => (
+            <span className="font-bold text-purple-600">₹{row.original.totalPoAmount?.toLocaleString('en-IN')}</span>
+        )
+    },
+    // ✅ ADD these three new columns
+    {
+        accessorKey: 'totalPaidAmount',
+        header: 'Total Paid Amount',
+        cell: ({ row }) => (
+            <span className="font-semibold text-green-600">
+                ₹{row.original.totalPaidAmount?.toLocaleString('en-IN')}
+            </span>
+        )
+    },
+    {
+        accessorKey: 'outstandingAmount',
+        header: 'Outstanding Amount',
+        cell: ({ row }) => (
+            <span className="font-semibold text-red-600">
+                ₹{row.original.outstandingAmount?.toLocaleString('en-IN')}
+            </span>
+        )
+    },
+    {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => {
+            const status = row.original.status;
+            const isPending = status?.toLowerCase() === 'pending';
+            const isComplete = status?.toLowerCase() === 'complete' || status?.toLowerCase() === 'completed';
+            
+            return (
+                <Badge 
+                    variant={isComplete ? "default" : "outline"} 
+                    className={
+                        isComplete 
+                            ? "bg-green-100 text-green-800 border-green-300" 
+                            : isPending 
+                                ? "bg-amber-100 text-amber-800 border-amber-300"
+                                : ""
+                    }
                 >
-                    <FileText className="mr-2 h-3 w-3" />
-                    PI Payment
-                </Button>
-            ),
-        },
-        {
-            accessorKey: 'poNumber',
-            header: 'PO Number',
-            cell: ({ row }) => (
-                <span className="font-medium text-purple-700">{row.original.poNumber || '-'}</span>
-            )
-        },
-        {
-            accessorKey: 'partyName',
-            header: 'Party Name',
-            cell: ({ row }) => (
-                <span className="font-medium">{row.original.partyName || '-'}</span>
-            )
-        },
-        {
-            accessorKey: 'internalCode',
-            header: 'Indent No.',
-            cell: ({ row }) => (
-                <Badge variant="outline" className="bg-gray-50">
-                    {row.original.internalCode || '-'}
+                    {status || 'Pending'}
                 </Badge>
-            )
-        },
-        {
-            accessorKey: 'product',
-            header: 'Product',
-            cell: ({ row }) => (
-                <span className="font-medium">{row.original.product || '-'}</span>
-            )
-        },
-        {
-            accessorKey: 'quantity',
-            header: 'Qty',
-            cell: ({ row }) => (
-                <Badge variant="outline" className="bg-blue-50">
-                    {row.original.quantity} {row.original.unit}
+            );
+        }
+    },
+    {
+        accessorKey: 'paymentTerms',
+        header: 'Payment Terms',
+        cell: ({ row }) => {
+            const terms = row.original.paymentTerms;
+            const isAdvance = terms?.toLowerCase().includes('advance');
+            return (
+                <Badge variant={isAdvance ? "default" : "outline"} className={isAdvance ? "bg-amber-100 text-amber-800" : ""}>
+                    {terms || '-'}
                 </Badge>
-            )
-        },
-        {
-            accessorKey: 'rate',
-            header: 'Rate',
-            cell: ({ row }) => (
-                <span className="font-semibold text-gray-800">₹{row.original.rate?.toLocaleString('en-IN')}</span>
-            )
-        },
-        {
-            accessorKey: 'amount',
-            header: 'Amount',
-            cell: ({ row }) => (
-                <span className="font-semibold text-green-600">₹{row.original.amount?.toLocaleString('en-IN')}</span>
-            )
-        },
-        {
-            accessorKey: 'totalPoAmount',
-            header: 'Total PO',
-            cell: ({ row }) => (
-                <span className="font-bold text-purple-600">₹{row.original.totalPoAmount?.toLocaleString('en-IN')}</span>
-            )
-        },
-        {
-            accessorKey: 'paymentTerms',
-            header: 'Terms',
-            cell: ({ row }) => {
-                const terms = row.original.paymentTerms;
-                const isAdvance = terms?.toLowerCase().includes('advance');
-                return (
-                    <Badge variant={isAdvance ? "default" : "outline"} className={isAdvance ? "bg-amber-100 text-amber-800" : ""}>
-                        {terms || '-'}
-                    </Badge>
-                );
+            );
+        }
+    },
+    {
+    accessorKey: 'deliveryDate',
+    header: 'Delivery Date',
+    cell: ({ row }) => {
+        const deliveryDate = row.original.deliveryDate;
+        
+        // Check if deliveryDate exists and is a valid date string
+        if (!deliveryDate) return <span className="text-sm">-</span>;
+        
+        try {
+            // Try to parse the date
+            const date = new Date(deliveryDate);
+            
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                // If not a valid Date object, return the original string
+                return <span className="text-sm">{deliveryDate}</span>;
             }
-        },
-        {
-            accessorKey: 'firmNameMatch',
-            header: 'Firm',
-            cell: ({ row }) => (
-                <Badge variant="outline" className="bg-gray-50">
-                    <Building className="mr-1 h-3 w-3" />
-                    {row.original.firmNameMatch || '-'}
-                </Badge>
-            )
-        },
-    ];
+            
+            // Format to dd/mm/yy
+            const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
+            
+            return <span className="text-sm">{formattedDate}</span>;
+        } catch (error) {
+            // If any error occurs, return the original string
+            return <span className="text-sm">{deliveryDate}</span>;
+        }
+    }
+},
+    {
+        accessorKey: 'firmNameMatch',
+        header: 'Firm',
+        cell: ({ row }) => (
+            <Badge variant="outline" className="bg-gray-50">
+                <Building className="mr-1 h-3 w-3" />
+                {row.original.firmNameMatch || '-'}
+            </Badge>
+        )
+    },
+];
 
     const schema = z.object({
         qty: z.string().min(1, 'Quantity is required'),
         piAmount: z.string().min(1, 'P.I Amount is required'),
-        piCopy: z.string().min(1, 'P.I Copy is required'),
+        piCopy: z.string().optional(), // Changed from .min(1, ...) to .optional()
         poRateWithoutTax: z.string().min(1, 'PO Rate Without Tax is required'),
     });
 
@@ -390,7 +492,7 @@ export default function PIApprovals() {
                             <Package2 size={28} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">PI Approvals</h1>
+                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">PI Approvals </h1>
                             <p className="text-gray-600">Process and approve Proforma Invoice payments</p>
                         </div>
                     </div>
@@ -499,7 +601,7 @@ export default function PIApprovals() {
                                                 <FileText className="h-6 w-6 text-purple-600" />
                                             </div>
                                             <div>
-                                                <DialogTitle className="text-xl">Process PI Approval</DialogTitle>
+                                                <DialogTitle className="text-xl">Process PI Approval 67</DialogTitle>
                                                 <DialogDescription>
                                                     Process Proforma Invoice for PO: <span className="font-semibold text-purple-600">{selectedItem.poNumber}</span>
                                                 </DialogDescription>
@@ -536,7 +638,7 @@ export default function PIApprovals() {
                                                     <p className="text-sm font-semibold text-gray-800">{selectedItem.product}</p>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <p className="text-xs font-medium text-gray-600">Quantity</p>
+                                                    <p className="text-xs font-medium text-gray-600">Quantity </p>
                                                     <p className="text-sm font-semibold text-gray-800">
                                                         {selectedItem.quantity} {selectedItem.unit}
                                                     </p>
@@ -555,23 +657,23 @@ export default function PIApprovals() {
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <FormField
-                                                control={form.control}
-                                                name="qty"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel className="font-medium">Quantity *</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                type="number"
-                                                                placeholder="Enter quantity"
-                                                                className="border-gray-300 focus:border-purple-500"
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
+    control={form.control}
+    name="qty"
+    render={({ field }) => (
+        <FormItem>
+            <FormLabel className="font-medium">Remarks *</FormLabel>
+            <FormControl>
+                <Input
+                    type="text"
+                    placeholder="Enter remarks"
+                    className="border-gray-300 focus:border-purple-500"
+                    {...field}
+                />
+            </FormControl>
+            <FormMessage />
+        </FormItem>
+    )}
+/>
 
                                             <FormField
                                                 control={form.control}
@@ -604,7 +706,7 @@ export default function PIApprovals() {
                                                 <FormItem>
                                                     <FormLabel className="font-medium flex items-center gap-2">
                                                         <Upload className="h-4 w-4" />
-                                                        P.I Copy (Upload File) *
+                                                        P.I Copy (Upload File) 
                                                     </FormLabel>
                                                     <FormControl>
                                                         <div className="space-y-2">

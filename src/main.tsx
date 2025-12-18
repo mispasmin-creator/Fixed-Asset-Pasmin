@@ -255,7 +255,7 @@ const routes: RouteAttributes[] = [
  {
     path: 'Full-Kiting',
     gateKey: 'ordersView',
-    name: 'Full Kiting',
+    name: 'Freight Full Kiting',
     icon: <FilePlus2 size={20} />,
     element: <FullKiting />,
     notifications: (sheets: any[]) =>
@@ -295,6 +295,9 @@ const routes: RouteAttributes[] = [
     notifications: (sheetData: any[], context?: any) => {
         if (!sheetData || !Array.isArray(sheetData)) return 0;
         
+        // Get user firm from context
+        const userFirm = context?.user?.firmNameMatch || 'all';
+        
         // Get paymentHistorySheet from context
         const paymentHistorySheet = context?.paymentHistorySheet || [];
         
@@ -308,14 +311,40 @@ const routes: RouteAttributes[] = [
             }
         });
         
-        // Count items that meet the criteria
+        // Count items that meet the criteria (matching MakePayment.tsx logic)
         const pendingPayments = sheetData.filter((item: any) => {
-            const planned7IsNotNull = item.planned7 && item.planned7.toString().trim() !== '';
-            const actual7IsNull = !item.actual7 || item.actual7.toString().trim() === '';
-            const hasMakePaymentLink = item.makePaymentLink?.toString().trim() !== '';
-            const isAlreadyPaid = item.indentNumber ? paidIndentNumbers.has(item.indentNumber.toString().trim()) : false;
+            // Filter by firm
+            const firmMatch = item.firmNameMatch || '';
+            const matchesFirm = userFirm.toLowerCase() === "all" || firmMatch === userFirm;
             
-            return planned7IsNotNull && actual7IsNull && hasMakePaymentLink && !isAlreadyPaid;
+            if (!matchesFirm) return false;
+            
+            // Get indent number
+            const indentNumber = item.indentNo?.toString().trim() || '';
+            
+            // Check if already paid
+            const isAlreadyPaid = indentNumber ? paidIndentNumbers.has(indentNumber) : false;
+            
+            // Check Planned and Actual conditions
+            const plannedValue = item.planned?.toString().trim() || '';
+            const actualValue = item.actual?.toString().trim() || '';
+            
+            const hasPlanned = plannedValue !== '' && 
+                              plannedValue !== 'N/A' && 
+                              plannedValue !== 'null' && 
+                              plannedValue !== 'undefined';
+            
+            const hasActual = actualValue !== '' && 
+                             actualValue !== 'N/A' && 
+                             actualValue !== 'null' && 
+                             actualValue !== 'undefined';
+            
+            // Check if payment form exists
+            const hasPaymentForm = item.paymentForm?.toString().trim() !== '' && 
+                                  item.paymentForm?.toString().trim() !== 'N/A';
+            
+            // Return true if all conditions are met
+            return !isAlreadyPaid && hasPlanned && !hasActual && hasPaymentForm;
         });
         
         return pendingPayments.length;
@@ -323,33 +352,53 @@ const routes: RouteAttributes[] = [
 },
 
  {
-    name: 'PI Approvals',
+    name: 'Against PI Approval',
     path: 'pi-approvals',
     element: <ExchangeMaterials />,
     icon: <Package2 size={18} />,
-    notifications: (sheetData: any[], context?: any) => {
-        // Type cast sheetData to poMasterSheet
-        const poMasterData = sheetData as any[];
-        if (!poMasterData || !Array.isArray(poMasterData)) return 0;
-        
-        // Get piApprovalSheet from context
+    notifications: (poMasterData: any[], context?: any) => {
+        // Get sheets from context
         const piApprovalSheet = context?.piApprovalSheet || [];
+        const user = context?.user || {};
+        
+        if (!poMasterData || !Array.isArray(poMasterData)) return 0;
         
         // Create Set of approved PO numbers from PI Approval sheet
         const approvedPONumbers = new Set(
-            piApprovalSheet.map((pi: any) => pi.piNo || pi.indentNo || '')
+            piApprovalSheet
+                .map((pi: any) => pi.poNumber || pi.piNo || '') // Try both poNumber and piNo
+                .filter(Boolean) // Remove empty values
         );
         
-        // Filter poMasterData to get pending approvals
-        // Make sure poMasterData items have poNumber field
-        const pendingApprovals = poMasterData.filter((po: any) => {
-            // Check if PO has a number and is not in approved list
-            return po.poNumber && po.poNumber.trim() !== '' && !approvedPONumbers.has(po.poNumber);
+        // Get unique pending PO numbers
+        const uniquePendingPOs = new Set<string>();
+        
+        poMasterData.forEach((po: any) => {
+            const poNumber = po.poNumber?.trim() || '';
+            const firmNameMatch = po.firmNameMatch?.trim() || '';
+            const status = po.status?.toLowerCase()?.trim() || '';
+            const userFirm = user?.firmNameMatch?.toLowerCase() || '';
+            
+            // Skip if no PO number
+            if (!poNumber) return;
+            
+            // Skip if already approved in PI Approval sheet
+            if (approvedPONumbers.has(poNumber)) return;
+            
+            // Filter by status (same as PI Approvals page)
+            if (status !== 'pending' && status !== '') return;
+            
+            // Filter by firm (same as PI Approvals page)
+            if (userFirm !== 'all' && firmNameMatch.toLowerCase() !== userFirm) return;
+            
+            // Add unique PO number
+            uniquePendingPOs.add(poNumber);
         });
         
-        return pendingApprovals.length;
+        return uniquePendingPOs.size;
     }
 },
+
 {
     path: 'exchange-materials', 
     gateKey: 'exchangeMaterials',  // ✅ Fixed: use existing permission
