@@ -202,7 +202,7 @@ const routes: RouteAttributes[] = [
 
     {
     path: 'po-history',
-    gateKey: 'poHistory',  // ✅ CHANGED from 'ordersView' to match sheet
+    // gateKey: 'poHistory',  // ✅ CHANGED from 'ordersView' to match sheet
     name: 'PO History',
     icon: <Package2 size={20} />,
     element: <Order />,
