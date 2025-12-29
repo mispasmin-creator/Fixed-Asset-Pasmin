@@ -828,7 +828,7 @@ export default function Dashboard() {
                                                     radius={[0, 8, 8, 0]}
                                                     barSize={24}
                                                 >
-                                                    {chartData.map((entry, index) => (
+                                                    {chartData.map((_, index) => (
                                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                                     ))}
                                                 </Bar>
@@ -887,7 +887,7 @@ export default function Dashboard() {
                                                     fill="#8884d8"
                                                     dataKey="orders"
                                                 >
-                                                    {topVendorsData.map((entry, index) => (
+                                                    {topVendorsData.map((_, index) => (
                                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                                     ))}
                                                 </Pie>
@@ -895,7 +895,7 @@ export default function Dashboard() {
                                                 <Legend 
                                                     verticalAlign="bottom" 
                                                     height={36}
-                                                    formatter={(value, entry: any) => (
+                                                    formatter={(_, entry: any) => (
                                                         <span style={{ color: '#374151', fontSize: '12px', fontWeight: 500 }}>
                                                             {entry.payload.name}
                                                         </span>
