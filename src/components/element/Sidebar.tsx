@@ -63,6 +63,7 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         case 'take-entry-by-tally':
             return tallyEntrySheet || [];
         case 'po-history':
+            return poMasterSheet || [];
         case 'Quality-Check-In-Received-Item':  
         case 'Send-Debit-Note':  // ✅ Make sure this returns storeInSheet
             return storeInSheet || [];

@@ -202,7 +202,7 @@ const routes: RouteAttributes[] = [
 
     {
     path: 'po-history',
-    gateKey: 'poHistory',  // ✅ CHANGED from 'ordersView' to match sheet
+    // gateKey: 'undefined',  // ✅ CHANGED from 'ordersView' to match sheet
     name: 'PO History',
     icon: <Package2 size={20} />,
     element: <Order />,
@@ -352,7 +352,7 @@ const routes: RouteAttributes[] = [
 },
 
  {
-    name: 'Against PI Approval',
+    name: 'HOD Approval',
     path: 'pi-approvals',
     element: <ExchangeMaterials />,
     icon: <Package2 size={18} />,

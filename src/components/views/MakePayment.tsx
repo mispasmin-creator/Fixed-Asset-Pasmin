@@ -124,7 +124,7 @@ export default function MakePayment() {
     const [isUpdating, setIsUpdating] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [debugInfo, setDebugInfo] = useState('');
-
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [stats, setStats] = useState({
         total: 0,
         totalPiAmount: 0,
@@ -267,13 +267,26 @@ export default function MakePayment() {
 
     // Handle Make Payment button click
     // Handle Make Payment button click
+// Handle Make Payment button click
 const handleMakePayment = async (item: MakePaymentData) => {
+    // Now this just opens the payment form for viewing
     if (!item.paymentFormLink || item.paymentFormLink === 'N/A') {
         alert("No payment link available for this item.");
         return;
     }
+    
+    // Simply open the payment form in new tab
+    window.open(item.paymentFormLink, '_blank');
+};
+// Handle bulk submission for selected items
+const handleBulkSubmit = async () => {
+    if (selectedItems.size === 0) {
+        alert("Please select at least one item to process payment.");
+        return;
+    }
 
-    setIsUpdating(item.indentNo);
+    setIsUpdating("bulk");
+    
     try {
         // Format current date as DD/MM/YYYY
         const today = new Date();
@@ -282,68 +295,109 @@ const handleMakePayment = async (item: MakePaymentData) => {
         const year = today.getFullYear();
         const currentDate = `${day}/${month}/${year}`;
         
-        // ✅ CHANGED: Update Status1 and Actual columns
-        const updateData = {
-            actual: currentDate,
-            status1: "ok"  // ✅ Changed from "status" to "status1"
-        };
-
-        console.log('Updating PI APPROVAL sheet row:', {
-            sheetName: 'PI APPROVAL',
-            rowIndex: item.rowIndex,
-            indentNo: item.indentNo,
-            updateData
-        });
-
-        // Check if updateSheet function exists
-        if (!updateSheet) {
-            console.error('updateSheet function is undefined');
-            alert("Update function not available. Please refresh the page.");
-            setIsUpdating(null);
-            return;
-        }
-
-        // Check if rowIndex is valid
-        if (!item.rowIndex || item.rowIndex < 7) { // Row 7 is where data starts (header at row 6 + 1)
-            console.error('Invalid rowIndex:', item.rowIndex);
-            alert(`Cannot update: Invalid row index (${item.rowIndex}). Please contact support.`);
-            setIsUpdating(null);
-            return;
-        }
-
-        console.log('Calling updateSheet function...');
-        const result = await updateSheet('PI APPROVAL', item.rowIndex, updateData);
+        const selectedData = tableData.filter(item => selectedItems.has(item.indentNo));
+        let successCount = 0;
+        let errorCount = 0;
         
-        console.log('Update result:', result);
+        // Process each selected item
+        for (const item of selectedData) {
+            try {
+                const updateData = {
+                    actual: currentDate,
+                    status1: "ok"
+                };
+
+                console.log('Updating PI APPROVAL sheet row:', {
+                    sheetName: 'PI APPROVAL',
+                    rowIndex: item.rowIndex,
+                    indentNo: item.indentNo,
+                    updateData
+                });
+
+                if (!updateSheet || !item.rowIndex || item.rowIndex < 7) {
+                    console.error('Invalid update for item:', item.indentNo);
+                    errorCount++;
+                    continue;
+                }
+
+                const result = await updateSheet('PI APPROVAL', item.rowIndex, updateData);
+                
+                if (result && result.success) {
+                    successCount++;
+                    
+                    // Open payment form for each successful update
+                    if (item.paymentFormLink && item.paymentFormLink !== 'N/A') {
+                        window.open(item.paymentFormLink, '_blank');
+                    }
+                } else {
+                    errorCount++;
+                    console.error('Update failed for item:', item.indentNo, result?.error);
+                }
+            } catch (error) {
+                console.error('Error updating item:', item.indentNo, error);
+                errorCount++;
+            }
+        }
         
-        if (result && result.success) {
-            // Remove the item from table immediately
-            setTableData(prev => prev.filter(data => data.indentNo !== item.indentNo));
+        // Clear selection after processing
+        setSelectedItems(new Set());
+        
+        // Remove successfully updated items from table
+        if (successCount > 0) {
+            const updatedIndentNos = selectedData
+                .filter((_, index) => index < successCount)
+                .map(item => item.indentNo);
+            
+            setTableData(prev => prev.filter(data => !updatedIndentNos.includes(data.indentNo)));
             
             // Update stats
-            setStats(prev => ({
-                ...prev,
-                total: prev.total - 1,
-                totalPiAmount: prev.totalPiAmount - item.piAmount,
-                totalPoAmount: prev.totalPoAmount - item.totalPoAmount,
-                totalOutstanding: prev.totalOutstanding - item.outstandingAmount
-            }));
-            
-            // ✅ Open payment form immediately after successful update
-            window.open(item.paymentFormLink, '_blank');
-            
-            // Show success message
-            alert("✅ Payment status updated successfully! Payment form opened in new tab.");
-        } else {
-            console.error('Update failed:', result?.error);
-            alert(`⚠️ Status update failed: ${result?.error || 'Unknown error'}. Please try again.`);
+            updatedIndentNos.forEach(indentNo => {
+                const item = selectedData.find(d => d.indentNo === indentNo);
+                if (item) {
+                    setStats(prev => ({
+                        ...prev,
+                        total: prev.total - 1,
+                        totalPiAmount: prev.totalPiAmount - item.piAmount,
+                        totalPoAmount: prev.totalPoAmount - item.totalPoAmount,
+                        totalOutstanding: prev.totalOutstanding - item.outstandingAmount
+                    }));
+                }
+            });
         }
-
+        
+        // Show result message
+        alert(`✅ ${successCount} payment(s) updated successfully!${errorCount > 0 ? ` ${errorCount} failed.` : ''}${successCount > 0 ? ' Payment forms opened in new tabs.' : ''}`);
+        
     } catch (error: any) {
-        console.error('Error updating payment status:', error);
-        alert(`❌ Failed to update payment status: ${error.message || 'Unknown error'}`);
+        console.error('Error in bulk submission:', error);
+        alert(`❌ Failed to process payments: ${error.message || 'Unknown error'}`);
     } finally {
         setIsUpdating(null);
+    }
+};
+
+// Handle checkbox selection
+const handleCheckboxChange = (indentNo: string) => {
+    setSelectedItems(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(indentNo)) {
+            newSet.delete(indentNo);
+        } else {
+            newSet.add(indentNo);
+        }
+        return newSet;
+    });
+};
+
+// Handle select all/none
+const handleSelectAll = () => {
+    if (selectedItems.size === tableData.length) {
+        // If all are selected, deselect all
+        setSelectedItems(new Set());
+    } else {
+        // Select all
+        const allIndentNos = tableData.map(item => item.indentNo);
+        setSelectedItems(new Set(allIndentNos));
     }
 };
 
@@ -365,35 +419,54 @@ const handleMakePayment = async (item: MakePaymentData) => {
 
     // Table columns with all required fields
     const columns: ColumnDef<MakePaymentData>[] = [
+
+        // Add this as the FIRST column in your columns array
+{
+    id: 'select',
+    header: () => (
+        <div className="flex items-center justify-center">
+            <input
+                type="checkbox"
+                checked={tableData.length > 0 && selectedItems.size === tableData.length}
+                onChange={handleSelectAll}
+                className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+            />
+        </div>
+    ),
+    cell: ({ row }: { row: Row<MakePaymentData> }) => {
+        const item = row.original;
+        return (
+            <div className="flex items-center justify-center">
+                <input
+                    type="checkbox"
+                    checked={selectedItems.has(item.indentNo)}
+                    onChange={() => handleCheckboxChange(item.indentNo)}
+                    className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                />
+            </div>
+        );
+    },
+},
         {
-            header: 'Action',
-            cell: ({ row }: { row: Row<MakePaymentData> }) => {
-                const item = row.original;
-                const isUpdatingThisItem = isUpdating === item.indentNo;
-                
-                return (
-                    <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleMakePayment(item)}
-                        disabled={!item.paymentFormLink || isUpdatingThisItem}
-                        className={`${isUpdatingThisItem ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} shadow-sm transition-colors`}
-                    >
-                        {isUpdatingThisItem ? (
-                            <>
-                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                                Updating...
-                            </>
-                        ) : (
-                            <>
-                                <CreditCard className="mr-2 h-3 w-3" />
-                                Make Payment
-                            </>
-                        )}
-                    </Button>
-                );
-            },
-        },
+    header: 'Action',
+    cell: ({ row }: { row: Row<MakePaymentData> }) => {
+        const item = row.original;
+        return (
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleMakePayment(item)}
+                disabled={!item.paymentFormLink}
+                className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+            >
+                <ExternalLink className="mr-2 h-3 w-3" />
+                View Form
+            </Button>
+        );
+    },
+},
+
+
         { 
             accessorKey: 'indentNo', 
             header: 'Indent No.',
@@ -631,7 +704,7 @@ const handleMakePayment = async (item: MakePaymentData) => {
 
                 {/* Main Content Card */}
                 <Card className="bg-white shadow-lg border-0 mb-6">
-                    <CardHeader className="pb-4">
+                    {/* <CardHeader className="pb-4">
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-xl font-bold text-gray-800">Pending Payments </CardTitle>
@@ -649,7 +722,78 @@ const handleMakePayment = async (item: MakePaymentData) => {
                                 </Badge>
                             )}
                         </div>
-                    </CardHeader>
+                    </CardHeader> */}
+                    <CardHeader className="pb-4">
+    <div className="flex items-center justify-between">
+        <div>
+            <CardTitle className="text-xl font-bold text-gray-800">Pending Payments</CardTitle>
+            <p className="text-sm text-gray-600 mt-1">
+                Select items and click Submit to mark as paid
+            </p>
+        </div>
+        <div className="flex items-center gap-3">
+            {stats.total > 0 && (
+                <Button
+                    variant="default"
+                    onClick={handleBulkSubmit}
+                    disabled={selectedItems.size === 0 || isUpdating === "bulk"}
+                    className={`bg-green-600 hover:bg-green-700 ${isUpdating === "bulk" ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                    {isUpdating === "bulk" ? (
+                        <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Processing...
+                        </>
+                    ) : (
+                        <>
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Submit Selected ({selectedItems.size})
+                        </>
+                    )}
+                </Button>
+            )}
+            {stats.total === 0 ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700">
+                    <CheckCircle className="mr-1 h-3 w-3" />
+                    All Payments Processed
+                </Badge>
+            ) : (
+                <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                    <Clock className="mr-1 h-3 w-3" />
+                    {stats.total} Payments Pending
+                </Badge>
+            )}
+        </div>
+    </div>
+</CardHeader>
+{stats.total > 0 && (
+    <div className="mb-4 px-6 py-3 bg-blue-50 border-b">
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <div className={`h-3 w-3 rounded-full ${selectedItems.size > 0 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                    <span className="text-sm font-medium">
+                        {selectedItems.size} of {stats.total} selected
+                    </span>
+                </div>
+                {selectedItems.size > 0 && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedItems(new Set())}
+                        className="h-7 px-2 text-red-600 hover:text-red-800 hover:bg-red-50"
+                    >
+                        Clear selection
+                    </Button>
+                )}
+            </div>
+            <div className="text-sm text-gray-600">
+                Click checkboxes to select items, then click Submit
+            </div>
+        </div>
+    </div>
+)}
+                    
                     <CardContent>
                         {loading ? (
                             <div className="text-center py-12">
