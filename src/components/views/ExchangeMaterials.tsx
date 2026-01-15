@@ -192,29 +192,92 @@ export default function PIApprovals() {
                 outstandingAmount: Number(sheet?.outstandingAmount || 0),
                 status: sheet?.status || 'Pending',
             }))
-            // ✅ ADD THIS FILTER - Only show items with "Pending" status
             .filter(item => {
                 const status = item.status?.toLowerCase() || '';
                 return status === 'pending' || status === '';
             });
 
-        // Group by PO Number to get unique POs only
-        const uniquePOMap = new Map<string, PIPendingData>();
+        // ✅ NEW LOGIC: Handle different PO patterns
+        const finalItems: PIPendingData[] = [];
+        
+        // Separate items by pattern
+        const storeNumberItems: Record<string, PIPendingData[]> = {}; // STORE-1, STORE-2 pattern
+        const storePONumberItems: PIPendingData[] = []; // STORE-PO-25-26-n pattern
+        const otherItems: PIPendingData[] = []; // Other patterns
+        
         pendingItems.forEach(item => {
-            if (!uniquePOMap.has(item.poNumber)) {
-                uniquePOMap.set(item.poNumber, item);
+            const po = item.poNumber;
+            
+            // Pattern 1: STORE-1, STORE-2 (group by indent)
+            if (po.match(/^STORE-\d+$/)) {
+                const indent = item.internalCode;
+                if (!storeNumberItems[indent]) {
+                    storeNumberItems[indent] = [];
+                }
+                storeNumberItems[indent].push(item);
+            }
+            // Pattern 2: STORE-PO-25-26-n (deduplicate by PO number)
+            else if (po.match(/^STORE-PO-25-26-\d+$/)) {
+                storePONumberItems.push(item);
+            }
+            // Pattern 3: Others (deduplicate by PO number)
+            else {
+                otherItems.push(item);
             }
         });
-
-        const pending = Array.from(uniquePOMap.values());
-        setPendingData(pending);
+        
+        // ✅ Process STORE-1, STORE-2 pattern: Latest for each indent
+        Object.keys(storeNumberItems).forEach(indent => {
+            const group = storeNumberItems[indent];
+            if (group.length > 0) {
+                // Sort by PO number to get latest (STORE-2 > STORE-1)
+                const sortedGroup = [...group].sort((a, b) => {
+                    const getNumber = (po: string) => parseInt(po.replace('STORE-', ''));
+                    return getNumber(b.poNumber) - getNumber(a.poNumber);
+                });
+                // Take the latest one
+                finalItems.push(sortedGroup[0]);
+            }
+        });
+        
+        // ✅ Process STORE-PO-25-26-n pattern: Unique PO numbers only
+        const seenStorePONumbers = new Set<string>();
+        storePONumberItems.forEach(item => {
+            if (!seenStorePONumbers.has(item.poNumber)) {
+                seenStorePONumbers.add(item.poNumber);
+                finalItems.push(item);
+            }
+        });
+        
+        // ✅ Process other patterns: Unique PO numbers only
+        const seenOtherPONumbers = new Set<string>();
+        otherItems.forEach(item => {
+            if (!seenOtherPONumbers.has(item.poNumber)) {
+                seenOtherPONumbers.add(item.poNumber);
+                finalItems.push(item);
+            }
+        });
+        
+        // Sort all items by timestamp (newest first)
+        const finalSortedItems = finalItems.sort((a, b) => {
+            if (a.timestamp && b.timestamp) {
+                const dateA = new Date(a.timestamp);
+                const dateB = new Date(b.timestamp);
+                if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+                    return dateB.getTime() - dateA.getTime();
+                }
+            }
+            return (b.rowIndex || 0) - (a.rowIndex || 0);
+        });
+        
+        setPendingData(finalSortedItems);
         
         // Calculate stats
-        const totalAmount = pending.reduce((sum, item) => sum + item.totalPoAmount, 0);
+        const totalAmount = finalSortedItems.reduce((sum, item) => sum + item.totalPoAmount, 0);
         setStats({
-            total: pending.length,
+            total: finalSortedItems.length,
             totalAmount,
-            pendingCount: pending.length
+            pendingCount: finalSortedItems.length
         });
 
     } catch (error) {
@@ -222,6 +285,7 @@ export default function PIApprovals() {
         setPendingData([]);
     }
 }, [poMasterSheet, piApprovalSheet, user?.firmNameMatch]);
+
 
 
     const pendingColumns: ColumnDef<PIPendingData>[] = [
@@ -249,14 +313,7 @@ export default function PIApprovals() {
             <span className="font-medium text-purple-700">{row.original.poNumber || '-'}</span>
         )
     },
-    {
-        accessorKey: 'partyName',
-        header: 'Party Name',
-        cell: ({ row }) => (
-            <span className="font-medium">{row.original.partyName || '-'}</span>
-        )
-    },
-    {
+     {
         accessorKey: 'internalCode',
         header: 'Indent No.',
         cell: ({ row }) => (
@@ -265,6 +322,31 @@ export default function PIApprovals() {
             </Badge>
         )
     },
+    {
+        accessorKey: 'partyName',
+        header: 'Party Name',
+        cell: ({ row }) => (
+            <span className="font-medium">{row.original.partyName || '-'}</span>
+        )
+    },
+
+  {
+        accessorKey: 'product',
+        header: 'Product Name',
+        cell: ({ row }) => (
+            <div className="max-w-[200px]">
+                <span className="text-sm font-medium text-gray-800">
+                    {row.original.product || '-'}
+                </span>
+                {row.original.description && (
+                    <p className="text-xs text-gray-500 truncate mt-1">
+                        {row.original.description}
+                    </p>
+                )}
+            </div>
+        )
+    },
+   
     {
         accessorKey: 'totalPoAmount',
         header: 'Total PO Amount',

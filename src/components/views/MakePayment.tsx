@@ -1,12 +1,13 @@
 import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import DataTable from '../element/DataTable';
 import { Button } from '../ui/button';
-import { DollarSign, CreditCard, Building, FileText, ExternalLink, CheckCircle, Clock, AlertCircle, Calendar } from 'lucide-react';
+import { DollarSign, CreditCard, Building, FileText, ExternalLink, CheckCircle, Clock, AlertCircle, Calendar, History } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 interface MakePaymentData {
     indentNo: string;
@@ -26,7 +27,7 @@ interface MakePaymentData {
     totalPaidAmount: number;
     outstandingAmount: number;
     status: string;
-    status1?: string;  // ✅ Add this line
+    status1?: string;
     planned: string;
     actual: string;
     delay: string;
@@ -66,8 +67,29 @@ interface PIApprovalItem {
 }
 
 interface PaymentHistoryItem {
-    uniqueNumber?: string;
+    timestamp?: string;
+    apPaymentNumber?: string;
     status?: string;
+    uniqueNumber?: string;
+    fmsName?: string;
+    payTo?: string;
+    amountToBePaid?: string | number;
+    remarks?: string;
+    anyAttachments?: string;
+    rowIndex?: number;
+}
+
+interface DisplayPaymentHistory {
+    rowIndex: number;
+    formattedTimestamp: string; // Add this
+    apPaymentNumber: string;
+    status: string;
+    uniqueNumber: string;
+    fmsName: string;
+    payTo: string;
+    amountToBePaid: number;
+    remarks: string;
+    anyAttachments: string;
 }
 
 // Helper function to format date from various formats to DD/MM/YYYY
@@ -120,16 +142,19 @@ const formatDate = (dateString: string): string => {
 export default function MakePayment() {
     const { piApprovalSheet, paymentHistorySheet, updateSheet } = useSheets();
     const [tableData, setTableData] = useState<MakePaymentData[]>([]);
+    const [historyData, setHistoryData] = useState<DisplayPaymentHistory[]>([]);
     const { user } = useAuth();
     const [isUpdating, setIsUpdating] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [historyLoading, setHistoryLoading] = useState(true);
     const [debugInfo, setDebugInfo] = useState('');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [stats, setStats] = useState({
         total: 0,
         totalPiAmount: 0,
         totalPoAmount: 0,
-        totalOutstanding: 0
+        totalOutstanding: 0,
+        historyCount: 0
     });
 
     // Debug: Check if updateSheet function exists
@@ -138,8 +163,9 @@ export default function MakePayment() {
             updateSheetExists: !!updateSheet,
             updateSheetType: typeof updateSheet,
             piApprovalSheetLength: Array.isArray(piApprovalSheet) ? piApprovalSheet.length : 0,
+            paymentHistorySheetLength: Array.isArray(paymentHistorySheet) ? paymentHistorySheet.length : 0,
         });
-    }, [updateSheet, piApprovalSheet]);
+    }, [updateSheet, piApprovalSheet, paymentHistorySheet]);
 
     // Filter data from PI APPROVAL sheet
     useEffect(() => {
@@ -253,153 +279,190 @@ export default function MakePayment() {
         const totalPoAmount = processedData.reduce((sum, item) => sum + item.totalPoAmount, 0);
         const totalOutstanding = processedData.reduce((sum, item) => sum + item.outstandingAmount, 0);
 
-        setStats({
+        setStats(prev => ({
+            ...prev,
             total: processedData.length,
             totalPiAmount,
             totalPoAmount,
             totalOutstanding
-        });
+        }));
 
         // Set debug info
         setDebugInfo(`Found ${processedData.length} items from ${filteredByFirm.length} filtered items (Total PI APPROVAL: ${piApprovalSheet.length})`);
         setLoading(false);
     }, [piApprovalSheet, paymentHistorySheet, user.firmNameMatch]);
 
-    // Handle Make Payment button click
-    // Handle Make Payment button click
-// Handle Make Payment button click
-const handleMakePayment = async (item: MakePaymentData) => {
-    // Now this just opens the payment form for viewing
-    if (!item.paymentFormLink || item.paymentFormLink === 'N/A') {
-        alert("No payment link available for this item.");
-        return;
-    }
-    
-    // Simply open the payment form in new tab
-    window.open(item.paymentFormLink, '_blank');
-};
-// Handle bulk submission for selected items
-const handleBulkSubmit = async () => {
-    if (selectedItems.size === 0) {
-        alert("Please select at least one item to process payment.");
-        return;
-    }
+    // Load Payment History data
+    useEffect(() => {
+        if (!paymentHistorySheet || !Array.isArray(paymentHistorySheet)) {
+            console.log('Payment History sheet is empty or not an array');
+            setHistoryData([]);
+            setHistoryLoading(false);
+            return;
+        }
 
-    setIsUpdating("bulk");
-    
-    try {
-        // Format current date as DD/MM/YYYY
-        const today = new Date();
-        const day = today.getDate().toString().padStart(2, '0');
-        const month = (today.getMonth() + 1).toString().padStart(2, '0');
-        const year = today.getFullYear();
-        const currentDate = `${day}/${month}/${year}`;
+        console.log('Processing Payment History data:', paymentHistorySheet.length, 'items');
+
+        // Process Payment History data
+        const processedHistoryData = paymentHistorySheet
+            .filter((item: PaymentHistoryItem) => {
+                // Filter by firm if needed
+                return true; // Show all history data
+            })
+            .map((item: PaymentHistoryItem, index) => {
+                const originalTimestamp = item.timestamp?.toString().trim() || '';
+                 const formattedTimestamp = originalTimestamp ? formatDate(originalTimestamp) : '';
+
+                return {
+                    rowIndex: item.rowIndex || index,
+                    timestamp: item.timestamp?.toString().trim() || '',
+                    formattedTimestamp: formattedTimestamp, // Add formatted version
+
+                    apPaymentNumber: item.apPaymentNumber?.toString().trim() || '',
+                    status: item.status?.toString().trim() || '',
+                    uniqueNumber: item.uniqueNumber?.toString().trim() || '',
+                    fmsName: item.fmsName?.toString().trim() || '',
+                    payTo: item.payTo?.toString().trim() || '',
+                    amountToBePaid: Number(item.amountToBePaid) || 0,
+                    remarks: item.remarks?.toString().trim() || '',
+                    anyAttachments: item.anyAttachments?.toString().trim() || '',
+                } as DisplayPaymentHistory;
+            })
+            .sort((a, b) => b.formattedTimestamp.localeCompare(a.formattedTimestamp));
+
+        console.log('Processed Payment History data:', processedHistoryData.length, 'items');
         
-        const selectedData = tableData.filter(item => selectedItems.has(item.indentNo));
-        let successCount = 0;
-        let errorCount = 0;
+        setHistoryData(processedHistoryData);
+        setStats(prev => ({
+            ...prev,
+            historyCount: processedHistoryData.length
+        }));
+        setHistoryLoading(false);
+    }, [paymentHistorySheet]);
+
+    // Handle Make Payment button click
+    const handleMakePayment = async (item: MakePaymentData) => {
+        if (!item.paymentFormLink || item.paymentFormLink === 'N/A') {
+            alert("No payment link available for this item.");
+            return;
+        }
         
-        // Process each selected item
-        for (const item of selectedData) {
-            try {
-                const updateData = {
-                    actual: currentDate,
-                    status1: "ok"
-                };
+        window.open(item.paymentFormLink, '_blank');
+    };
 
-                console.log('Updating PI APPROVAL sheet row:', {
-                    sheetName: 'PI APPROVAL',
-                    rowIndex: item.rowIndex,
-                    indentNo: item.indentNo,
-                    updateData
-                });
+    // Handle bulk submission for selected items
+    const handleBulkSubmit = async () => {
+        if (selectedItems.size === 0) {
+            alert("Please select at least one item to process payment.");
+            return;
+        }
 
-                if (!updateSheet || !item.rowIndex || item.rowIndex < 7) {
-                    console.error('Invalid update for item:', item.indentNo);
-                    errorCount++;
-                    continue;
-                }
+        setIsUpdating("bulk");
+        
+        try {
+            const today = new Date();
+            const day = today.getDate().toString().padStart(2, '0');
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const year = today.getFullYear();
+            const currentDate = `${day}/${month}/${year}`;
+            
+            const selectedData = tableData.filter(item => selectedItems.has(item.indentNo));
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (const item of selectedData) {
+                try {
+                    const updateData = {
+                        actual: currentDate,
+                        status1: "ok"
+                    };
 
-                const result = await updateSheet('PI APPROVAL', item.rowIndex, updateData);
-                
-                if (result && result.success) {
-                    successCount++;
-                    
-                    // Open payment form for each successful update
-                    if (item.paymentFormLink && item.paymentFormLink !== 'N/A') {
-                        window.open(item.paymentFormLink, '_blank');
+                    console.log('Updating PI APPROVAL sheet row:', {
+                        sheetName: 'PI APPROVAL',
+                        rowIndex: item.rowIndex,
+                        indentNo: item.indentNo,
+                        updateData
+                    });
+
+                    if (!updateSheet || !item.rowIndex || item.rowIndex < 7) {
+                        console.error('Invalid update for item:', item.indentNo);
+                        errorCount++;
+                        continue;
                     }
-                } else {
+
+                    const result = await updateSheet('PI APPROVAL', item.rowIndex, updateData);
+                    
+                    if (result && result.success) {
+                        successCount++;
+                        
+                        if (item.paymentFormLink && item.paymentFormLink !== 'N/A') {
+                            window.open(item.paymentFormLink, '_blank');
+                        }
+                    } else {
+                        errorCount++;
+                        console.error('Update failed for item:', item.indentNo, result?.error);
+                    }
+                } catch (error) {
+                    console.error('Error updating item:', item.indentNo, error);
                     errorCount++;
-                    console.error('Update failed for item:', item.indentNo, result?.error);
                 }
-            } catch (error) {
-                console.error('Error updating item:', item.indentNo, error);
-                errorCount++;
             }
-        }
-        
-        // Clear selection after processing
-        setSelectedItems(new Set());
-        
-        // Remove successfully updated items from table
-        if (successCount > 0) {
-            const updatedIndentNos = selectedData
-                .filter((_, index) => index < successCount)
-                .map(item => item.indentNo);
             
-            setTableData(prev => prev.filter(data => !updatedIndentNos.includes(data.indentNo)));
+            setSelectedItems(new Set());
             
-            // Update stats
-            updatedIndentNos.forEach(indentNo => {
-                const item = selectedData.find(d => d.indentNo === indentNo);
-                if (item) {
-                    setStats(prev => ({
-                        ...prev,
-                        total: prev.total - 1,
-                        totalPiAmount: prev.totalPiAmount - item.piAmount,
-                        totalPoAmount: prev.totalPoAmount - item.totalPoAmount,
-                        totalOutstanding: prev.totalOutstanding - item.outstandingAmount
-                    }));
-                }
-            });
+            if (successCount > 0) {
+                const updatedIndentNos = selectedData
+                    .filter((_, index) => index < successCount)
+                    .map(item => item.indentNo);
+                
+                setTableData(prev => prev.filter(data => !updatedIndentNos.includes(data.indentNo)));
+                
+                updatedIndentNos.forEach(indentNo => {
+                    const item = selectedData.find(d => d.indentNo === indentNo);
+                    if (item) {
+                        setStats(prev => ({
+                            ...prev,
+                            total: prev.total - 1,
+                            totalPiAmount: prev.totalPiAmount - item.piAmount,
+                            totalPoAmount: prev.totalPoAmount - item.totalPoAmount,
+                            totalOutstanding: prev.totalOutstanding - item.outstandingAmount
+                        }));
+                    }
+                });
+            }
+            
+            alert(`✅ ${successCount} payment(s) updated successfully!${errorCount > 0 ? ` ${errorCount} failed.` : ''}${successCount > 0 ? ' Payment forms opened in new tabs.' : ''}`);
+            
+        } catch (error: any) {
+            console.error('Error in bulk submission:', error);
+            alert(`❌ Failed to process payments: ${error.message || 'Unknown error'}`);
+        } finally {
+            setIsUpdating(null);
         }
-        
-        // Show result message
-        alert(`✅ ${successCount} payment(s) updated successfully!${errorCount > 0 ? ` ${errorCount} failed.` : ''}${successCount > 0 ? ' Payment forms opened in new tabs.' : ''}`);
-        
-    } catch (error: any) {
-        console.error('Error in bulk submission:', error);
-        alert(`❌ Failed to process payments: ${error.message || 'Unknown error'}`);
-    } finally {
-        setIsUpdating(null);
-    }
-};
+    };
 
-// Handle checkbox selection
-const handleCheckboxChange = (indentNo: string) => {
-    setSelectedItems(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(indentNo)) {
-            newSet.delete(indentNo);
+    // Handle checkbox selection
+    const handleCheckboxChange = (indentNo: string) => {
+        setSelectedItems(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(indentNo)) {
+                newSet.delete(indentNo);
+            } else {
+                newSet.add(indentNo);
+            }
+            return newSet;
+        });
+    };
+
+    // Handle select all/none
+    const handleSelectAll = () => {
+        if (selectedItems.size === tableData.length) {
+            setSelectedItems(new Set());
         } else {
-            newSet.add(indentNo);
+            const allIndentNos = tableData.map(item => item.indentNo);
+            setSelectedItems(new Set(allIndentNos));
         }
-        return newSet;
-    });
-};
-
-// Handle select all/none
-const handleSelectAll = () => {
-    if (selectedItems.size === tableData.length) {
-        // If all are selected, deselect all
-        setSelectedItems(new Set());
-    } else {
-        // Select all
-        const allIndentNos = tableData.map(item => item.indentNo);
-        setSelectedItems(new Set(allIndentNos));
-    }
-};
+    };
 
     // Function to handle file link clicks
     const handleFileLinkClick = (url: string, type: 'PI' | 'PO') => {
@@ -408,65 +471,59 @@ const handleSelectAll = () => {
             return;
         }
         
-        // Check if URL is valid
         if (url.startsWith('http') || url.startsWith('https')) {
             window.open(url, '_blank');
         } else {
-            // If it's not a full URL, it might be a Google Drive file ID or path
             alert(`Please check the ${type} copy link: ${url}`);
         }
     };
 
-    // Table columns with all required fields
+    // Table columns for pending payments
     const columns: ColumnDef<MakePaymentData>[] = [
-
-        // Add this as the FIRST column in your columns array
-{
-    id: 'select',
-    header: () => (
-        <div className="flex items-center justify-center">
-            <input
-                type="checkbox"
-                checked={tableData.length > 0 && selectedItems.size === tableData.length}
-                onChange={handleSelectAll}
-                className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-            />
-        </div>
-    ),
-    cell: ({ row }: { row: Row<MakePaymentData> }) => {
-        const item = row.original;
-        return (
-            <div className="flex items-center justify-center">
-                <input
-                    type="checkbox"
-                    checked={selectedItems.has(item.indentNo)}
-                    onChange={() => handleCheckboxChange(item.indentNo)}
-                    className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                />
-            </div>
-        );
-    },
-},
         {
-    header: 'Action',
-    cell: ({ row }: { row: Row<MakePaymentData> }) => {
-        const item = row.original;
-        return (
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleMakePayment(item)}
-                disabled={!item.paymentFormLink}
-                className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-            >
-                <ExternalLink className="mr-2 h-3 w-3" />
-                View Form
-            </Button>
-        );
-    },
-},
-
-
+            id: 'select',
+            header: () => (
+                <div className="flex items-center justify-center">
+                    <input
+                        type="checkbox"
+                        checked={tableData.length > 0 && selectedItems.size === tableData.length}
+                        onChange={handleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                </div>
+            ),
+            cell: ({ row }: { row: Row<MakePaymentData> }) => {
+                const item = row.original;
+                return (
+                    <div className="flex items-center justify-center">
+                        <input
+                            type="checkbox"
+                            checked={selectedItems.has(item.indentNo)}
+                            onChange={() => handleCheckboxChange(item.indentNo)}
+                            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                        />
+                    </div>
+                );
+            },
+        },
+        {
+            header: 'Action',
+            cell: ({ row }: { row: Row<MakePaymentData> }) => {
+                const item = row.original;
+                return (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleMakePayment(item)}
+                        disabled={!item.paymentFormLink}
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                    >
+                        <ExternalLink className="mr-2 h-3 w-3" />
+                        Make Payment
+                    </Button>
+                );
+            },
+        },
         { 
             accessorKey: 'indentNo', 
             header: 'Indent No.',
@@ -635,6 +692,85 @@ const handleSelectAll = () => {
         },
     ];
 
+    // Table columns for payment history
+    const historyColumns: ColumnDef<DisplayPaymentHistory>[] = [
+        {
+        accessorKey: 'formattedTimestamp', // Change from 'timestamp' to 'formattedTimestamp'
+            header: 'Timestamp',
+            cell: ({ row }) => (
+                <div className="text-sm text-gray-600">
+                {row.original.formattedTimestamp || '-'}
+                </div>
+            )
+        },
+        
+        {
+            accessorKey: 'uniqueNumber',
+            header: 'Unique Number',
+            cell: ({ row }) => (
+                <div className="bg-gray-50 py-1 px-3 rounded-md inline-block border">
+                    {row.original.uniqueNumber || '-'}
+                </div>
+            )
+        },
+        {
+            accessorKey: 'fmsName',
+            header: 'FMS Name',
+            cell: ({ row }) => (
+                <span className="font-medium">{row.original.fmsName || '-'}</span>
+            )
+        },
+        {
+            accessorKey: 'payTo',
+            header: 'Pay To',
+            cell: ({ row }) => (
+                <span className="font-medium">{row.original.payTo || '-'}</span>
+            )
+        },
+        {
+            accessorKey: 'amountToBePaid',
+            header: 'Amount',
+            cell: ({ row }) => (
+                <span className="font-bold text-green-600">
+                    ₹{row.original.amountToBePaid?.toLocaleString('en-IN')}
+                </span>
+            )
+        },
+        {
+            accessorKey: 'remarks',
+            header: 'Remarks',
+            cell: ({ row }) => (
+                <span className="text-sm text-gray-600 max-w-xs truncate">
+                    {row.original.remarks || '-'}
+                </span>
+            )
+        },
+        {
+            accessorKey: 'anyAttachments',
+            header: 'Attachments',
+            cell: ({ row }) => {
+                const hasAttachments = row.original.anyAttachments?.trim() !== '';
+                return (
+                    <div>
+                        {hasAttachments ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(row.original.anyAttachments, '_blank')}
+                                className="text-blue-600 hover:text-blue-700"
+                            >
+                                <ExternalLink className="mr-1 h-3 w-3" />
+                                View
+                            </Button>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                    </div>
+                );
+            }
+        },
+    ];
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-green-50 p-4 md:p-6">
             <div className="mx-auto max-w-7xl">
@@ -646,12 +782,12 @@ const handleSelectAll = () => {
                         </div>
                         <div>
                             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Make Payment</h1>
-                            <p className="text-gray-600">Process payments from PI APPROVAL sheet based on planned dates</p>
+                            <p className="text-gray-600">Process payments from PI APPROVAL sheet and view payment history</p>
                         </div>
                     </div>
 
                     {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                         <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
@@ -699,161 +835,199 @@ const handleSelectAll = () => {
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
+                            <CardContent className="p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-600">Payment History</p>
+                                        <p className="text-2xl font-bold text-blue-600 mt-1">{stats.historyCount}</p>
+                                    </div>
+                                    <History className="h-10 w-10 text-blue-500" />
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
 
                 {/* Main Content Card */}
                 <Card className="bg-white shadow-lg border-0 mb-6">
-                    {/* <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-xl font-bold text-gray-800">Pending Payments </CardTitle>
-                                
-                            </div>
-                            {stats.total === 0 ? (
-                                <Badge variant="outline" className="bg-green-50 text-green-700">
-                                    <CheckCircle className="mr-1 h-3 w-3" />
-                                    All Payments Processed
-                                </Badge>
-                            ) : (
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700">
-                                    <Clock className="mr-1 h-3 w-3" />
-                                    {stats.total} Payments Pending
-                                </Badge>
-                            )}
-                        </div>
-                    </CardHeader> */}
-                    <CardHeader className="pb-4">
-    <div className="flex items-center justify-between">
-        <div>
-            <CardTitle className="text-xl font-bold text-gray-800">Pending Payments</CardTitle>
-            <p className="text-sm text-gray-600 mt-1">
-                Select items and click Submit to mark as paid
-            </p>
-        </div>
-        <div className="flex items-center gap-3">
-            {stats.total > 0 && (
-                <Button
-                    variant="default"
-                    onClick={handleBulkSubmit}
-                    disabled={selectedItems.size === 0 || isUpdating === "bulk"}
-                    className={`bg-green-600 hover:bg-green-700 ${isUpdating === "bulk" ? 'opacity-70 cursor-not-allowed' : ''}`}
-                >
-                    {isUpdating === "bulk" ? (
-                        <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Processing...
-                        </>
-                    ) : (
-                        <>
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Submit Selected ({selectedItems.size})
-                        </>
-                    )}
-                </Button>
-            )}
-            {stats.total === 0 ? (
-                <Badge variant="outline" className="bg-green-50 text-green-700">
-                    <CheckCircle className="mr-1 h-3 w-3" />
-                    All Payments Processed
-                </Badge>
-            ) : (
-                <Badge variant="outline" className="bg-amber-50 text-amber-700">
-                    <Clock className="mr-1 h-3 w-3" />
-                    {stats.total} Payments Pending
-                </Badge>
-            )}
-        </div>
-    </div>
-</CardHeader>
-{stats.total > 0 && (
-    <div className="mb-4 px-6 py-3 bg-blue-50 border-b">
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <div className={`h-3 w-3 rounded-full ${selectedItems.size > 0 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                    <span className="text-sm font-medium">
-                        {selectedItems.size} of {stats.total} selected
-                    </span>
-                </div>
-                {selectedItems.size > 0 && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedItems(new Set())}
-                        className="h-7 px-2 text-red-600 hover:text-red-800 hover:bg-red-50"
-                    >
-                        Clear selection
-                    </Button>
-                )}
-            </div>
-            <div className="text-sm text-gray-600">
-                Click checkboxes to select items, then click Submit
-            </div>
-        </div>
-    </div>
-)}
-                    
-                    <CardContent>
-                        {loading ? (
-                            <div className="text-center py-12">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-                                <p className="text-gray-600">Loading PI APPROVAL data...</p>
-                            </div>
-                        ) : tableData.length > 0 ? (
-                            <div>
-                                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                                    
-                                </div>
-                                <DataTable
-                                    data={tableData}
-                                    columns={columns}
-                                    searchFields={['indentNo', 'partyName', 'productName', 'poNumber', 'paymentTerms', 'firmNameMatch', 'internalCode']}
-                                    dataLoading={false}
-                                    className="border rounded-lg"
-                                />
-                            </div>
-                        ) : (
-                            <div className="text-center py-12">
-                                <CheckCircle className="h-16 w-16 text-green-300 mx-auto mb-4" />
-                                <h3 className="text-lg font-semibold text-gray-700 mb-2">No Pending Payments Found</h3>
-                                <p className="text-gray-500 mb-4">All PI payments have been processed or no payments meet the criteria.</p>
-                                <div className="mt-6 text-sm text-gray-600 max-w-md mx-auto bg-gray-50 p-4 rounded-lg">
-                                    <p className="font-medium mb-3 text-gray-800">📋 To appear in this list, PI APPROVAL items must:</p>
-                                    <ul className="list-disc list-inside text-left space-y-2">
-                                        <li>Have a <span className="font-medium">Planned</span> date set (not empty)</li>
-                                        <li>Have an <span className="font-medium">Actual</span> date empty</li>
-                                        <li>Have a <span className="font-medium">Payment Form</span> link (not empty)</li>
-                                        <li>Not be marked as paid in Payment History sheet</li>
-                                        <li>Match your firm filter: <span className="font-medium">{user.firmNameMatch === "all" ? "All firms" : user.firmNameMatch}</span></li>
-                                    </ul>
-                                    <div className="mt-4 p-3 bg-blue-50 rounded">
-                                        <p className="text-blue-700 text-sm">
-                                            <strong>Debug Info:</strong> Found {piApprovalSheet?.length || 0} rows in PI APPROVAL sheet
-                                        </p>
+                    <CardContent className="p-0">
+                        <Tabs defaultValue="pending" className="w-full">
+                            <TabsList className="w-full max-w-md grid grid-cols-2 m-6">
+                                <TabsTrigger value="pending" className="flex items-center gap-2">
+                                    <Clock className="h-4 w-4" />
+                                    Pending Payments
+                                    {stats.total > 0 && (
+                                        <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                                            {stats.total}
+                                        </span>
+                                    )}
+                                </TabsTrigger>
+                                <TabsTrigger value="history" className="flex items-center gap-2">
+                                    <History className="h-4 w-4" />
+                                    Payment History
+                                    {stats.historyCount > 0 && (
+                                        <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                                            {stats.historyCount}
+                                        </span>
+                                    )}
+                                </TabsTrigger>
+                            </TabsList>
+
+                            {/* Pending Payments Tab */}
+                            <TabsContent value="pending" className="px-6 pb-6">
+                                {stats.total > 0 && (
+                                    <div className="mb-4 px-6 py-3 bg-blue-50 border-b">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`h-3 w-3 rounded-full ${selectedItems.size > 0 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                                    <span className="text-sm font-medium">
+                                                        {selectedItems.size} of {stats.total} selected
+                                                    </span>
+                                                </div>
+                                                {selectedItems.size > 0 && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setSelectedItems(new Set())}
+                                                        className="h-7 px-2 text-red-600 hover:text-red-800 hover:bg-red-50"
+                                                    >
+                                                        Clear selection
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            <div className="text-sm text-gray-600">
+                                                Click checkboxes to select items, then click Submit
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        )}
+                                )}
+
+                                {loading ? (
+                                    <div className="text-center py-12">
+                                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                                        <p className="text-gray-600">Loading PI APPROVAL data...</p>
+                                    </div>
+                                ) : tableData.length > 0 ? (
+                                    <div>
+                                        {stats.total > 0 && (
+                                            <div className="mb-4 flex items-center justify-between">
+                                                <div className="flex-1">
+                                                    <p className="text-sm text-gray-600">
+                                                        Showing {tableData.length} pending payments
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    {stats.total > 0 && (
+                                                        <Button
+                                                            variant="default"
+                                                            onClick={handleBulkSubmit}
+                                                            disabled={selectedItems.size === 0 || isUpdating === "bulk"}
+                                                            className={`bg-green-600 hover:bg-green-700 ${isUpdating === "bulk" ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                                        >
+                                                            {isUpdating === "bulk" ? (
+                                                                <>
+                                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                                    Processing...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                                                    Submit Selected ({selectedItems.size})
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                    {stats.total === 0 ? (
+                                                        <Badge variant="outline" className="bg-green-50 text-green-700">
+                                                            <CheckCircle className="mr-1 h-3 w-3" />
+                                                            All Payments Processed
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                                                            <Clock className="mr-1 h-3 w-3" />
+                                                            {stats.total} Payments Pending
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <DataTable
+                                            data={tableData}
+                                            columns={columns}
+                                            searchFields={['indentNo', 'partyName', 'productName', 'poNumber', 'paymentTerms', 'firmNameMatch', 'internalCode']}
+                                            dataLoading={false}
+                                            className="border rounded-lg"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <CheckCircle className="h-16 w-16 text-green-300 mx-auto mb-4" />
+                                        <h3 className="text-lg font-semibold text-gray-700 mb-2">No Pending Payments Found</h3>
+                                        <p className="text-gray-500 mb-4">All PI payments have been processed or no payments meet the criteria.</p>
+                                        <div className="mt-6 text-sm text-gray-600 max-w-md mx-auto bg-gray-50 p-4 rounded-lg">
+                                            <p className="font-medium mb-3 text-gray-800">📋 To appear in this list, PI APPROVAL items must:</p>
+                                            <ul className="list-disc list-inside text-left space-y-2">
+                                                <li>Have a <span className="font-medium">Planned</span> date set (not empty)</li>
+                                                <li>Have an <span className="font-medium">Actual</span> date empty</li>
+                                                <li>Have a <span className="font-medium">Payment Form</span> link (not empty)</li>
+                                                <li>Not be marked as paid in Payment History sheet</li>
+                                                <li>Match your firm filter: <span className="font-medium">{user.firmNameMatch === "all" ? "All firms" : user.firmNameMatch}</span></li>
+                                            </ul>
+                                            <div className="mt-4 p-3 bg-blue-50 rounded">
+                                                <p className="text-blue-700 text-sm">
+                                                    <strong>Debug Info:</strong> Found {piApprovalSheet?.length || 0} rows in PI APPROVAL sheet
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </TabsContent>
+
+                            {/* Payment History Tab */}
+                            <TabsContent value="history" className="px-6 pb-6">
+                                {historyLoading ? (
+                                    <div className="text-center py-12">
+                                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                                        <p className="text-gray-600">Loading Payment History...</p>
+                                    </div>
+                                ) : historyData.length > 0 ? (
+                                    <>
+                                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <History className="h-5 w-5 text-gray-600" />
+                                                    <span className="font-medium text-gray-700">
+                                                        Total Records: {stats.historyCount}
+                                                    </span>
+                                                </div>
+                                                <div className="text-sm text-gray-500">
+                                                    Showing all payment history records
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <DataTable<DisplayPaymentHistory, ColumnDef<DisplayPaymentHistory>>
+                                            data={historyData}
+                                            columns={historyColumns}
+                                            searchFields={['timestamp', 'apPaymentNumber', 'uniqueNumber', 'fmsName', 'payTo', 'remarks']}
+                                            dataLoading={false}
+                                            className="border rounded-lg"
+                                        />
+                                    </>
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <History className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                                        <h3 className="text-lg font-semibold text-gray-700 mb-2">No Payment History Found</h3>
+                                        <p className="text-gray-500">No payment history records available</p>
+                                    </div>
+                                )}
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
-                
-                {/* Debug Section - Only show in development */}
-                {import.meta.env.DEV && (
-                    <Card className="bg-gray-50 border border-gray-200 mt-4">
-                        <CardHeader>
-                            <CardTitle className="text-sm font-medium text-gray-700">Debug Information</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-xs font-mono">
-                                <p>updateSheet function: {typeof updateSheet === 'function' ? '✅ Available' : '❌ Not available'}</p>
-                                <p>PI APPROVAL rows: {piApprovalSheet?.length || 0}</p>
-                                <p>Payment History rows: {paymentHistorySheet?.length || 0}</p>
-                                <p>Filtered rows: {stats.total}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
             </div>
         </div>
     );

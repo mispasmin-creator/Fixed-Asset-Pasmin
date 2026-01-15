@@ -45,12 +45,32 @@ export default function POHistory() {
             // Safe array check
             const safePoMasterSheet: POMasterRecord[] = Array.isArray(poMasterSheet) ? poMasterSheet : [];
             
+            // Filter by firm name
             const filteredByFirm = safePoMasterSheet.filter((sheet: POMasterRecord) => 
                 user?.firmNameMatch?.toLowerCase() === "all" || 
                 sheet?.firmNameMatch === user?.firmNameMatch
             );
             
-            const processedHistoryData: HistoryData[] = filteredByFirm.map((sheet: POMasterRecord) => ({
+            // Create a map to store unique PO numbers (latest entry for each PO number)
+            const poNumberMap = new Map<string, POMasterRecord>();
+            
+            filteredByFirm.forEach((sheet: POMasterRecord) => {
+                const poNumber = sheet?.poNumber;
+                if (poNumber) {
+                    // If PO number already exists, keep the existing entry
+                    // (This ensures we only keep the first occurrence, which is usually the latest/most complete)
+                    if (!poNumberMap.has(poNumber)) {
+                        poNumberMap.set(poNumber, sheet);
+                    }
+                }
+            });
+            
+            // Convert map back to array
+            const uniquePoMasterData = Array.from(poNumberMap.values());
+            
+            console.log(`📊 Original PO count: ${filteredByFirm.length}, Unique PO count: ${uniquePoMasterData.length}`);
+            
+            const processedHistoryData: HistoryData[] = uniquePoMasterData.map((sheet: POMasterRecord) => ({
                 approvedBy: sheet?.approvedBy || '',
                 poCopy: sheet?.pdf || '',
                 poNumber: sheet?.poNumber || '',
@@ -84,6 +104,14 @@ export default function POHistory() {
                 })()
             }));
             
+            // Sort by PO number (optional)
+            processedHistoryData.sort((a, b) => {
+                if (a.poNumber && b.poNumber) {
+                    return a.poNumber.localeCompare(b.poNumber);
+                }
+                return 0;
+            });
+            
             setHistoryData(processedHistoryData);
             
         } catch (error) {
@@ -97,11 +125,14 @@ export default function POHistory() {
         { 
             accessorKey: 'poNumber', 
             header: 'PO Number',
-            cell: ({ getValue }) => (
-                <div className="text-center font-bold text-blue-700">
-                    {getValue() as string || '-'}
-                </div>
-            )
+            cell: ({ getValue }) => {
+                const poNumber = getValue() as string;
+                return (
+                    <div className="font-bold text-blue-700">
+                        {poNumber || '-'}
+                    </div>
+                );
+            }
         },
         {
             accessorKey: 'poCopy',
@@ -109,23 +140,19 @@ export default function POHistory() {
             cell: ({ row }) => {
                 const attachment = row.original.poCopy;
                 return attachment ? (
-                    <div className="flex justify-center">
-                        <a 
-                            href={attachment} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 font-semibold underline flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
-                        >
-                            <FileText className="h-4 w-4" />
-                            View PDF
-                        </a>
-                    </div>
+                    <a 
+                        href={attachment} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 font-semibold underline flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
+                    >
+                        <FileText className="h-4 w-4" />
+                        View PDF
+                    </a>
                 ) : (
-                    <div className="flex justify-center">
-                        <span className="text-gray-400 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200">
-                            No PDF
-                        </span>
-                    </div>
+                    <span className="text-gray-400 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200">
+                        No PDF
+                    </span>
                 );
             },
         },
@@ -133,41 +160,41 @@ export default function POHistory() {
             accessorKey: 'vendorName', 
             header: 'Vendor Name',
             cell: ({ getValue }) => (
-                <div className="text-center">
-                    <Building className="inline mr-2 h-4 w-4 text-gray-600" />
-                    {getValue() as string || '-'}
+                <div className="flex items-center gap-2">
+                    <Building className="h-4 w-4 text-gray-600 flex-shrink-0" />
+                    <span className="truncate">{getValue() as string || '-'}</span>
                 </div>
             )
         },
-        { 
-            accessorKey: 'preparedBy', 
-            header: 'Prepared By',
-            cell: ({ getValue }) => (
-                <div className="text-center">
-                    <User className="inline mr-2 h-4 w-4 text-gray-600" />
-                    {getValue() as string || '-'}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'approvedBy', 
-            header: 'Approved By',
-            cell: ({ getValue }) => (
-                <div className="text-center">
-                    <UserCheck className="inline mr-2 h-4 w-4 text-gray-600" />
-                    {getValue() as string || '-'}
-                </div>
-            )
-        },
+        // { 
+        //     accessorKey: 'preparedBy', 
+        //     header: 'Prepared By',
+        //     cell: ({ getValue }) => (
+        //         <div className="flex items-center gap-2">
+        //             <User className="h-4 w-4 text-gray-600 flex-shrink-0" />
+        //             <span>{getValue() as string || '-'}</span>
+        //         </div>
+        //     )
+        // },
+        // { 
+        //     accessorKey: 'approvedBy', 
+        //     header: 'Approved By',
+        //     cell: ({ getValue }) => (
+        //         <div className="flex items-center gap-2">
+        //             <UserCheck className="h-4 w-4 text-gray-600 flex-shrink-0" />
+        //             <span>{getValue() as string || '-'}</span>
+        //         </div>
+        //     )
+        // },
         {
             accessorKey: 'totalAmount',
             header: 'Amount',
             cell: ({ row }) => {
                 const amount = row.original.totalAmount || 0;
                 return (
-                    <div className="text-center font-bold text-green-700 flex items-center justify-center gap-1">
-                        <IndianRupee className="h-4 w-4" />
-                        {amount.toLocaleString('en-IN')}
+                    <div className="font-bold text-green-700 flex items-center gap-1">
+                        <IndianRupee className="h-4 w-4 flex-shrink-0" />
+                        <span>{amount.toLocaleString('en-IN')}</span>
                     </div>
                 );
             },
@@ -183,14 +210,12 @@ export default function POHistory() {
                     "default";
                 
                 return (
-                    <div className="flex justify-center">
-                        <Pill 
-                            variant={variant} 
-                            className="font-semibold text-sm px-3 py-2"
-                        >
-                            {status}
-                        </Pill>
-                    </div>
+                    <Pill 
+                        variant={variant} 
+                        className="font-semibold text-sm px-3 py-2"
+                    >
+                        {status}
+                    </Pill>
                 );
             }
         },
@@ -203,6 +228,23 @@ export default function POHistory() {
                     <Heading heading="PO History" subtext="View purchase orders and their status">
                         <Package2 size={50} className="text-blue-600" />
                     </Heading>
+
+                    <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Package2 className="h-5 w-5 text-blue-600" />
+                                <div>
+                                    <h3 className="font-semibold text-blue-800">Unique PO Numbers</h3>
+                                    <p className="text-sm text-blue-600">
+                                        Showing {historyData.length} unique purchase orders
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                                Duplicate PO numbers have been filtered
+                            </div>
+                        </div>
+                    </div>
 
                     <DataTable
                         data={historyData}
