@@ -72,7 +72,6 @@ export default function AppSidebar({ items }: AppSidebarProps) {
         case 'pending-poss':
             return indentSheet || [];
         case 'Bill-Not-Received':
-        case 'Send-Debit-Note':
         case 'Make-Payment':
               return piApprovalSheet || [];
         case 'audit-data':
