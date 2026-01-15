@@ -305,7 +305,7 @@ export default function MakePayment() {
 
         // Process Payment History data
         const processedHistoryData = paymentHistorySheet
-            .filter((item: PaymentHistoryItem) => {
+            .filter(() => {
                 // Filter by firm if needed
                 return true; // Show all history data
             })
