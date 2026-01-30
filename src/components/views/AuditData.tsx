@@ -22,11 +22,9 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { postToSheet } from '@/lib/fetchers';
-import { Calculator } from 'lucide-react';
+import { Calculator, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
-import Heading from '../element/Heading';
-import { Pill } from '../ui/pill';
 import { Badge } from '../ui/badge';
 
 interface TallyEntryPendingData {
@@ -34,6 +32,8 @@ interface TallyEntryPendingData {
     liftNumber: string;
     poNumber: string;
     materialInDate: string;
+    indentDate?: string;
+    purchaseDate?: string;
     productName: string;
     billNo: string;
     qty: number;
@@ -158,6 +158,8 @@ export default () => {
                 liftNumber: i.liftNumber || '',
                 poNumber: i.poNumber || '',
                 materialInDate: i.materialInDate || '',
+                indentDate: i.indentDate || '',
+                purchaseDate: i.purchaseDate || '',
                 productName: i.productName || '',
                 billNo: i.billNo || '',
                 qty: i.qty || 0,
@@ -200,6 +202,33 @@ export default () => {
         }
     };
 
+    // Helper function to render bill image
+    const renderBillImage = (url: string) => {
+        if (!url || url.trim() === '') {
+            return (
+                <div className="text-center text-gray-400">
+                    <ImageIcon size={16} className="mx-auto mb-1" />
+                    <span className="text-xs">No Image</span>
+                </div>
+            );
+        }
+        
+        return (
+            <Button
+                variant="ghost"
+                size="sm"
+                className="h-8"
+                onClick={() => window.open(url, '_blank')}
+            >
+                <div className="flex items-center gap-1">
+                    <ImageIcon size={14} />
+                    <span className="text-xs">View</span>
+                    <ExternalLink size={12} />
+                </div>
+            </Button>
+        );
+    };
+
     const pendingColumns: ColumnDef<TallyEntryPendingData>[] = [
         ...(user.receiveItemView
             ? [
@@ -225,43 +254,154 @@ export default () => {
             ]
             : []),
         { 
-            accessorKey: 'indentNumber', 
-            header: 'Indent No.',
+            accessorKey: 'materialInDate', 
+            header: 'Material In Date',
             cell: ({ row }) => (
                 <div className="text-center">
-                    {row.original.indentNumber}
+                    {formatDate(row.original.materialInDate)}
+                </div>
+            )
+        },
+        { accessorKey: 'indentNumber', header: 'Indent No.' },
+
+// { 
+//   accessorKey: 'indentDate',
+//   header: 'Indent Date',
+//   cell: ({ row }) => formatDate(row.original.indentDate ?? ''),
+// },
+
+// {
+//   accessorKey: 'purchaseDate',
+//   header: 'Purchase Date',
+//   cell: ({ row }) => formatDate(row.original.purchaseDate ?? ''),
+// },
+
+{
+  accessorKey: 'billReceivedLater',
+  header: 'Bill Received Later',
+  cell: ({ row }) => (
+    <Badge variant="secondary">
+      {row.original.billReceivedLater || 'No'}
+    </Badge>
+  ),
+},
+
+{
+  accessorKey: 'notReceivedBillNo',
+  header: 'Not Received Bill No.',
+  cell: ({ row }) => row.original.notReceivedBillNo || '-',
+},
+
+{ accessorKey: 'location', header: 'Location' },
+{ accessorKey: 'typeOfBills', header: 'Type Of Bills' },
+
+{
+  accessorKey: 'productImage',
+  header: 'Product Image',
+  cell: ({ row }) =>
+    row.original.productImage ? (
+      <a
+        href={row.original.productImage}
+        target="_blank"
+        className="text-primary underline"
+      >
+        View
+      </a>
+    ) : (
+      <span className="text-gray-400">-</span>
+    ),
+},
+
+{ accessorKey: 'area', header: 'Area' },
+{ accessorKey: 'indentedFor', header: 'Indented For' },
+// { accessorKey: 'approvedPartyName', header: 'Approved Party Name' },
+
+{ accessorKey: 'rate', header: 'Rate' },
+{ accessorKey: 'indentQty', header: 'Indent Qty' },
+{ accessorKey: 'totalRate', header: 'Total Rate' },
+
+        { 
+            accessorKey: 'productName', 
+            header: 'Product Name',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.productName}
                 </div>
             )
         },
         { 
-            accessorKey: 'firmNameMatch', 
-            header: 'Firm Name',
+            accessorKey: 'billNo', 
+            header: 'Bill No.',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.billNo}
+                </div>
+            )
+        },
+        { 
+            accessorKey: 'qty', 
+            header: 'Qty',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.qty}
+                </div>
+            )
+        },
+        { 
+            accessorKey: 'billAmt', 
+            header: 'Bill Amt',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    ₹{row.original.billAmt}
+                </div>
+            )
+        },
+        {
+            accessorKey: 'partyName',
+            header: 'Party Name',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.partyName}
+                </div>
+            )
+        },
+        {
+            accessorKey: 'billReceivedLater',
+            header: 'Bill Status',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    <Badge 
+                        variant={row.original.billReceivedLater === 'Bill Received' ? 'default' : 'secondary'}
+                        className="capitalize"
+                    >
+                        {row.original.billReceivedLater || 'Not Received'}
+                    </Badge>
+                </div>
+            )
+        },
+        {
+            accessorKey: 'billImage',
+            header: 'Bill Image',
+            cell: ({ row }) => (
+                <div className="flex justify-center">
+                    {renderBillImage(row.original.billImage)}
+                </div>
+            )
+        },
+        {
+            accessorKey: 'firmNameMatch',
+            header: 'Firm',
             cell: ({ row }) => (
                 <div className="text-center">
                     {row.original.firmNameMatch}
                 </div>
             )
-        },
-        {
-            accessorKey: 'liftNumber',
-            header: 'Lift Number',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.liftNumber || ''}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'poNumber',
-            header: 'PO Number',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.poNumber || ''}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'materialInDate',
+        }
+    ];
+
+    const historyColumns: ColumnDef<TallyEntryHistoryData>[] = [
+        { 
+            accessorKey: 'materialInDate', 
             header: 'Material In Date',
             cell: ({ row }) => (
                 <div className="text-center">
@@ -301,69 +441,12 @@ export default () => {
             header: 'Bill Amt',
             cell: ({ row }) => (
                 <div className="text-center">
-                    {row.original.billAmt}
-                </div>
-            )
-        },
-    ];
-
-    const historyColumns: ColumnDef<TallyEntryHistoryData>[] = [
-        { 
-            accessorKey: 'indentNumber', 
-            header: 'Indent No.',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.indentNumber}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'firmNameMatch', 
-            header: 'Firm Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.firmNameMatch}
+                    ₹{row.original.billAmt}
                 </div>
             )
         },
         {
-            accessorKey: 'poNumber',
-            header: 'PO Number',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.poNumber || ''}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'materialInDate',
-            header: 'Material In Date',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {formatDate(row.original.materialInDate)}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'productName', 
-            header: 'Product Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.productName}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'billNo', 
-            header: 'Bill No.',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.billNo}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'partyName', 
+            accessorKey: 'partyName',
             header: 'Party Name',
             cell: ({ row }) => (
                 <div className="text-center">
@@ -371,12 +454,12 @@ export default () => {
                 </div>
             )
         },
-        { 
-            accessorKey: 'billAmt', 
-            header: 'Bill Amt',
+        {
+            accessorKey: 'billImage',
+            header: 'Bill Image',
             cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.billAmt}
+                <div className="flex justify-center">
+                    {renderBillImage(row.original.billImage)}
                 </div>
             )
         },
@@ -385,10 +468,10 @@ export default () => {
             header: 'Status',
             cell: ({ row }) => {
                 const status = row.original.status1;
-                const variant = status === 'Done' ? 'secondary' : 'destructive';
+                const variant = status === 'Done' ? 'default' : status === 'Not Done' ? 'destructive' : 'secondary';
                 return (
                     <div className="flex justify-center">
-                        <Badge variant={variant}>
+                        <Badge variant={variant} className="capitalize">
                             {status}
                         </Badge>
                     </div>
@@ -399,11 +482,20 @@ export default () => {
             accessorKey: 'remarks1', 
             header: 'Remarks',
             cell: ({ row }) => (
-                <div className="text-center">
+                <div className="text-center max-w-[200px] truncate" title={row.original.remarks1}>
                     {row.original.remarks1}
                 </div>
             )
         },
+        {
+            accessorKey: 'firmNameMatch',
+            header: 'Firm',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.firmNameMatch}
+                </div>
+            )
+        }
     ];
 
     const schema = z.object({
@@ -462,7 +554,7 @@ export default () => {
                 'TALLY ENTRY'
             );
 
-            toast.success(`Updated status for ${selectedItem?.indentNumber}`);
+            toast.success(`Updated status for ${selectedItem?.productName}`);
             setOpenDialog(false);
             setTimeout(() => updateAll(), 1000);
 
@@ -568,7 +660,7 @@ export default () => {
                                         <DataTable
                                             data={pendingData}
                                             columns={pendingColumns}
-                                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo']}
+                                            searchFields={['productName', 'billNo', 'partyName', 'billReceivedLater']}
                                             dataLoading={false}
                                             className="border-none"
                                         />
@@ -596,11 +688,11 @@ export default () => {
                                             data={historyData}
                                             columns={historyColumns}
                                             searchFields={[
-                                                'indentNumber',
                                                 'productName',
-                                                'partyName',
                                                 'billNo',
+                                                'partyName',
                                                 'status1',
+                                                'remarks1',
                                             ]}
                                             dataLoading={false}
                                             className="border-none"
@@ -623,24 +715,44 @@ export default () => {
                                 <DialogHeader className="text-center">
                                     <DialogTitle className="text-2xl">Process Tally Entry</DialogTitle>
                                     <DialogDescription>
-                                        Process entry for indent number{' '}
-                                        <span className="font-bold text-primary">{selectedItem.indentNumber}</span>
+                                        Process entry for{' '}
+                                        <span className="font-bold text-primary">{selectedItem.productName}</span>
                                     </DialogDescription>
                                 </DialogHeader>
 
                                 <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-5 rounded-lg border">
                                     <h3 className="text-lg font-bold mb-4 text-gray-800">Entry Details</h3>
+                                    
+                                    {/* Bill Image Preview */}
+                                    {selectedItem.billImage && selectedItem.billImage.trim() !== '' && (
+                                        <div className="mb-4 p-3 bg-white rounded-lg border flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <ImageIcon className="text-primary" size={20} />
+                                                <span className="font-medium">Bill Image Available</span>
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => window.open(selectedItem.billImage, '_blank')}
+                                                className="flex items-center gap-2"
+                                            >
+                                                View Bill
+                                                <ExternalLink size={14} />
+                                            </Button>
+                                        </div>
+                                    )}
+                                    
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {[
-                                            { label: 'Indent No.', value: selectedItem.indentNumber },
                                             { label: 'Product Name', value: selectedItem.productName },
-                                            { label: 'Party Name', value: selectedItem.partyName },
                                             { label: 'Bill No.', value: selectedItem.billNo },
+                                            { label: 'Party Name', value: selectedItem.partyName },
                                             { label: 'Quantity', value: selectedItem.qty },
-                                            { label: 'Bill Amount', value: selectedItem.billAmt },
+                                            { label: 'Bill Amount', value: `₹${selectedItem.billAmt}` },
+                                            { label: 'Bill Status', value: selectedItem.billReceivedLater || 'Not Received' },
+                                            { label: 'Material In Date', value: formatDate(selectedItem.materialInDate) },
                                             { label: 'Location', value: selectedItem.location },
                                             { label: 'Area', value: selectedItem.area },
-                                            { label: 'Rate', value: selectedItem.rate },
                                             { label: 'Firm', value: selectedItem.firmNameMatch },
                                         ].map((item, index) => (
                                             <div key={index} className="space-y-1">
