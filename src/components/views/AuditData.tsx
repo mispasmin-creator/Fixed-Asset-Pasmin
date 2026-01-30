@@ -264,6 +264,86 @@ export default () => {
         },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
 
+         {
+            accessorKey: 'partyName',
+            header: 'Party Name',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.partyName}
+                </div>
+            )
+        },
+        
+        { 
+            accessorKey: 'productName', 
+            header: 'Product Name',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.productName}
+                </div>
+            )
+        },
+         { 
+            accessorKey: 'billNo', 
+            header: 'Bill No.',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.billNo}
+                </div>
+            )
+        },
+
+        {
+            accessorKey: 'billImage',
+            header: 'Bill Image',
+            cell: ({ row }) => (
+                <div className="flex justify-center">
+                    {renderBillImage(row.original.billImage)}
+                </div>
+            )
+        },
+
+        { 
+            accessorKey: 'qty', 
+            header: 'Qty',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    {row.original.qty}
+                </div>
+            )
+        },
+        { accessorKey: 'rate', header: 'Rate' },
+        { accessorKey: 'totalRate', header: 'Total Rate' },
+
+        { 
+            accessorKey: 'billAmt', 
+            header: 'Bill Amt',
+            cell: ({ row }) => (
+                <div className="text-center">
+                    ₹{row.original.billAmt}
+                </div>
+            )
+        },
+        { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
+        { accessorKey: 'location', header: 'Location' },
+
+{
+  accessorKey: 'productImage',
+  header: 'Product Image',
+  cell: ({ row }) =>
+    row.original.productImage ? (
+      <a
+        href={row.original.productImage}
+        target="_blank"
+        className="text-primary underline"
+      >
+        View
+      </a>
+    ) : (
+      <span className="text-gray-400">-</span>
+    ),
+},
+
 // { 
 //   accessorKey: 'indentDate',
 //   header: 'Indent Date',
@@ -292,79 +372,16 @@ export default () => {
   cell: ({ row }) => row.original.notReceivedBillNo || '-',
 },
 
-{ accessorKey: 'location', header: 'Location' },
-{ accessorKey: 'typeOfBills', header: 'Type Of Bills' },
 
-{
-  accessorKey: 'productImage',
-  header: 'Product Image',
-  cell: ({ row }) =>
-    row.original.productImage ? (
-      <a
-        href={row.original.productImage}
-        target="_blank"
-        className="text-primary underline"
-      >
-        View
-      </a>
-    ) : (
-      <span className="text-gray-400">-</span>
-    ),
-},
 
 { accessorKey: 'area', header: 'Area' },
 { accessorKey: 'indentedFor', header: 'Indented For' },
 // { accessorKey: 'approvedPartyName', header: 'Approved Party Name' },
 
-{ accessorKey: 'rate', header: 'Rate' },
 { accessorKey: 'indentQty', header: 'Indent Qty' },
-{ accessorKey: 'totalRate', header: 'Total Rate' },
 
-        { 
-            accessorKey: 'productName', 
-            header: 'Product Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.productName}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'billNo', 
-            header: 'Bill No.',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.billNo}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'qty', 
-            header: 'Qty',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.qty}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'billAmt', 
-            header: 'Bill Amt',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    ₹{row.original.billAmt}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'partyName',
-            header: 'Party Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.partyName}
-                </div>
-            )
-        },
+       
+       
         {
             accessorKey: 'billReceivedLater',
             header: 'Bill Status',
@@ -379,15 +396,7 @@ export default () => {
                 </div>
             )
         },
-        {
-            accessorKey: 'billImage',
-            header: 'Bill Image',
-            cell: ({ row }) => (
-                <div className="flex justify-center">
-                    {renderBillImage(row.original.billImage)}
-                </div>
-            )
-        },
+        
         {
             accessorKey: 'firmNameMatch',
             header: 'Firm',
