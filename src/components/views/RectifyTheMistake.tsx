@@ -102,7 +102,7 @@ export default () => {
             filteredByFirm
                 .filter((i) => i.planned2 !== '' && i.actual2 === '')
                 .map((i) => ({
-                    indentNo: i.indentNo || '',
+                    indentNo: i.indentNumber || '',   // ✅ FIX
                     indentDate: i.indentDate || '',
                     purchaseDate: i.purchaseDate || '',
                     materialInDate: i.materialInDate || '',
@@ -217,33 +217,33 @@ export default () => {
                 </div>
             )
         },
-        { 
-            accessorKey: 'firmNameMatch', 
-            header: 'Firm Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.firmNameMatch}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'indentDate', 
-            header: 'Indent Date',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {formatDate(row.original.indentDate)}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'purchaseDate', 
-            header: 'Purchase Date',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {formatDate(row.original.purchaseDate)}
-                </div>
-            )
-        },
+        // { 
+        //     accessorKey: 'firmNameMatch', 
+        //     header: 'Firm Name',
+        //     cell: ({ row }) => (
+        //         <div className="text-center">
+        //             {row.original.firmNameMatch}
+        //         </div>
+        //     )
+        // },
+        // { 
+        //     accessorKey: 'indentDate', 
+        //     header: 'Indent Date',
+        //     cell: ({ row }) => (
+        //         <div className="text-center">
+        //             {formatDate(row.original.indentDate)}
+        //         </div>
+        //     )
+        // },
+        // { 
+        //     accessorKey: 'purchaseDate', 
+        //     header: 'Purchase Date',
+        //     cell: ({ row }) => (
+        //         <div className="text-center">
+        //             {formatDate(row.original.purchaseDate)}
+        //         </div>
+        //     )
+        // },
         { 
             accessorKey: 'materialInDate', 
             header: 'Material In Date',
