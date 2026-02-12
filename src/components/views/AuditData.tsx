@@ -1,543 +1,418 @@
+import { Package2, Calculator, FileCheck, AlertTriangle, RotateCcw, ShieldCheck, CheckSquare } from 'lucide-react';
+import Heading from '../element/Heading';
 import { useSheets } from '@/context/SheetsContext';
+import { useEffect, useState, useMemo } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuth } from '@/context/AuthContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+
+import { Button } from '../ui/button';
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
+    DialogFooter,
     DialogClose,
+    DialogDescription,
 } from '../ui/dialog';
-import { Button } from '../ui/button';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '../ui/select';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
-import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Textarea } from '../ui/textarea';
 import { postToSheet } from '@/lib/fetchers';
-import { Calculator, ExternalLink, Image as ImageIcon } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { useAuth } from '@/context/AuthContext';
-import { Badge } from '../ui/badge';
+import { PuffLoader as Loader } from 'react-spinners';
+import { Textarea } from '../ui/textarea';
 
-interface TallyEntryPendingData {
-    indentNumber: string;
-    liftNumber: string;
-    poNumber: string;
-    materialInDate: string;
-    indentDate?: string;
-    purchaseDate?: string;
-    productName: string;
-    billNo: string;
-    qty: number;
-    partyName: string;
-    billAmt: number;
-    billImage: string;
-    billReceivedLater: string;
-    notReceivedBillNo: string;
-    location: string;
-    typeOfBills: string;
-    productImage: string;
-    area: string;
-    indentedFor: string;
-    approvedPartyName: string;
-    rate: number;
-    indentQty: number;
-    totalRate: number;
-    firmNameMatch: string; 
-    planned1: string;
-    actual1: string;
+// Define a type for sheet items
+interface SheetItem {
+    rowIndex: string;
+    [key: string]: any;
 }
 
-interface TallyEntryHistoryData {
+// Helper function to get field value with multiple possible keys
+const getFieldValue = (item: SheetItem | undefined | null, ...possibleKeys: string[]): any => {
+    if (!item) return '';
+    for (const key of possibleKeys) {
+        if (item[key] !== undefined && item[key] !== null && item[key] !== '') {
+            return item[key];
+        }
+    }
+    return '';
+};
+
+// Helper function to format date to dd/mm/yy
+const formatDate = (dateString: string): string => {
+    if (!dateString) return '';
+    try {
+        const dateObj = new Date(dateString);
+        if (isNaN(dateObj.getTime())) return dateString;
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const year = String(dateObj.getFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
+    } catch {
+        return dateString;
+    }
+};
+
+// Define Stage interface
+interface StageConfig {
+    name: string;
+    plannedField?: string;
+    actualField?: string;
+    statusField?: string;
+    remarksField?: string;
+    color: string;
+    icon: any;
+    description: string;
+    formTitle?: string;
+    statusOptions?: string[];
+}
+
+// Define Stages object with proper typing
+const STAGES: Record<string, StageConfig> = {
+    AUDIT: {
+        name: 'Audit Data',
+        plannedField: 'planned1',
+        actualField: 'Actual 1',
+        statusField: 'Status 1',
+        remarksField: 'Remarks1',
+        color: 'bg-amber-100 text-amber-800 border-amber-200',
+        icon: FileCheck,
+        description: 'Initial audit verification',
+        formTitle: 'Process Audit Data',
+        statusOptions: ['Done', 'Not Done']
+    },
+    RECTIFY: {
+        name: 'Rectify Mistake',
+        plannedField: 'planned2',
+        actualField: 'Actual 2',
+        statusField: 'Status 2',
+        remarksField: 'Remarks 2',
+        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        icon: AlertTriangle,
+        description: 'Correct mistakes and add bilty',
+        formTitle: 'Rectify The Mistake',
+        statusOptions: ['Done', 'Not Done']
+    },
+    REAUDIT: {
+        name: 'Reaudit Data',
+        plannedField: 'planned3',
+        actualField: 'Actual 3',
+        statusField: 'Status 3',
+        remarksField: 'Remarks 3',
+        color: 'bg-purple-100 text-purple-800 border-purple-200',
+        icon: RotateCcw,
+        description: 'Re-audit after corrections',
+        formTitle: 'Reauditing Data',
+        statusOptions: ['Done', 'Not Done']
+    },
+    TALLY_ENTRY: {
+        name: 'Tally Entry',
+        plannedField: 'planned4',
+        actualField: 'Actual 4',
+        statusField: 'Status 4',
+        remarksField: 'Remarks 4',
+        color: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+        icon: Calculator,
+        description: 'Enter data into tally system',
+        formTitle: 'Tally Entry',
+        statusOptions: ['Done', 'Not Done']
+    },
+    AGAIN_AUDIT: {
+        name: 'Again Auditing',
+        plannedField: 'planned5',
+        actualField: 'Actual 5',
+        statusField: 'Status 5',
+        remarksField: 'Remarks 5',
+        color: 'bg-orange-100 text-orange-800 border-orange-200',
+        icon: ShieldCheck,
+        description: 'Final audit verification',
+        formTitle: 'Again Auditing',
+        statusOptions: ['okey', 'not okey']
+    },
+    COMPLETED: {
+        name: 'Completed',
+        color: 'bg-green-100 text-green-800 border-green-200',
+        icon: CheckSquare,
+        description: 'All stages completed'
+    }
+};
+
+// Update the ProcessedTallyData interface to include all remarks fields
+interface ProcessedTallyData {
+    rowIndex: string;
     indentNumber: string;
-    liftNumber: string;
-    poNumber: string;
+    indentDate: string;
+    purchaseDate: string;
     materialInDate: string;
+    plannedDate: string;
     productName: string;
-    billNo: string;
-    qty: number;
-    partyName: string;
-    billAmt: number;
-    billImage: string;
-    billReceivedLater: string;
-    notReceivedBillNo: string;
-    location: string;
-    typeOfBills: string;
-    productImage: string;
-    area: string;
-    indentedFor: string;
-    approvedPartyName: string;
-    rate: number;
-    indentQty: number;
-    totalRate: number;
-    status1: string;
-    remarks1: string;
     firmNameMatch: string;
-    planned1: string;
-    actual1: string;
+    billNo: string;
+    qty: number;
+    partyName: string;
+    billAmt: number;
+    billImage: string;
+    billReceivedLater: string;
+    notReceivedBillNo: string;
+    location: string;
+    typeOfBills: string;
+    productImage: string;
+    area: string;
+    indentedFor: string;
+    approvedPartyName: string;
+    rate: number;
+    indentQty: number;
+    totalRate: number;
+    liftNumber: string;
+    poNumber: string;
+    currentStage: keyof typeof STAGES | string;
+    isCompleted: boolean;
+
+    // Add all remarks fields
+    remarks1: string;
+    remarks2: string;
+    remarks3: string;
+    remarks4: string;
+    remarks5: string;
+
+    // Add status fields for display
+    status1: string;
+    status2: string;
+    status3: string;
+    status4: string;
+    status5: string;
 }
 
-export default () => {
-    const { tallyEntrySheet, updateAll } = useSheets();
-    const { user } = useAuth();
+// Define form values type
+interface FormValues {
+    status: string | undefined;
+    remarks: string;
+}
 
-    const [pendingData, setPendingData] = useState<TallyEntryPendingData[]>([]);
-    const [historyData, setHistoryData] = useState<TallyEntryHistoryData[]>([]);
-    const [selectedItem, setSelectedItem] = useState<TallyEntryPendingData | null>(null);
+export default function PcReportTable() {
+    const { tallyEntrySheet, poMasterLoading, updateAll } = useSheets();
+    const [allData, setAllData] = useState<ProcessedTallyData[]>([]);
+    const [selectedRow, setSelectedRow] = useState<ProcessedTallyData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
-    const [activeTab, setActiveTab] = useState('pending');
+    const { user } = useAuth();
+    const [activeTab, setActiveTab] = useState('ALL');
 
-    // FILTERING CONDITIONS EXPLAINED:
-    // 1. First filter by firm name (if user.firmNameMatch is not "all")
-    // 2. For PENDING: Items where planned1 is NOT empty AND actual1 IS empty
-    //    (This means the task is scheduled but not yet completed)
-    // 3. For HISTORY: Items where planned1 is NOT empty AND actual1 is NOT empty
-    //    (This means the task was scheduled and has been completed)
-
+    // Process all data from sheet
     useEffect(() => {
-        const filteredByFirm = tallyEntrySheet.filter(item => 
-            user.firmNameMatch.toLowerCase() === "all" || 
-            item.firmNameMatch?.toLowerCase() === user.firmNameMatch?.toLowerCase()
+        if (!tallyEntrySheet) return;
+
+        console.log("🔍 Processing tally entry sheet data...");
+
+        // Filter by firm name first
+        const filteredByFirm = tallyEntrySheet.filter((item: SheetItem) => {
+            const firmName = getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch');
+            return user.firmNameMatch.toLowerCase() === "all" || firmName === user.firmNameMatch;
+        });
+
+        console.log('✅ Filtered by firm:', filteredByFirm.length);
+
+        // Process each item
+        const processedData = filteredByFirm.map((item: SheetItem) => {
+            // Get all stage fields
+            const planned1 = getFieldValue(item, 'Planned 1', 'planned1');
+            const actual1 = getFieldValue(item, 'Actual 1', 'actual1');
+            const planned2 = getFieldValue(item, 'Planned 2', 'planned2');
+            const actual2 = getFieldValue(item, 'Actual 2', 'actual2');
+            const planned3 = getFieldValue(item, 'Planned 3', 'planned3');
+            const actual3 = getFieldValue(item, 'Actual 3', 'actual3');
+            const planned4 = getFieldValue(item, 'Planned 4', 'planned4');
+            const actual4 = getFieldValue(item, 'Actual 4', 'actual4');
+            const planned5 = getFieldValue(item, 'Planned 5', 'planned5');
+            const actual5 = getFieldValue(item, 'Actual 5', 'actual5');
+
+            // Helper function
+            const hasValue = (value: any): boolean => {
+                return value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+            };
+
+            // Determine current stage
+            let currentStage: keyof typeof STAGES = 'AUDIT';
+            let plannedDate = '';
+            let isCompleted = false;
+
+            if (hasValue(planned1) && !hasValue(actual1)) {
+                currentStage = 'AUDIT';
+                plannedDate = planned1;
+            } else if (hasValue(planned2) && !hasValue(actual2)) {
+                currentStage = 'RECTIFY';
+                plannedDate = planned2;
+            } else if (hasValue(planned3) && !hasValue(actual3)) {
+                currentStage = 'REAUDIT';
+                plannedDate = planned3;
+            } else if (hasValue(planned4) && !hasValue(actual4)) {
+                currentStage = 'TALLY_ENTRY';
+                plannedDate = planned4;
+            } else if (hasValue(planned5) && !hasValue(actual5)) {
+                currentStage = 'AGAIN_AUDIT';
+                plannedDate = planned5;
+            } else if (hasValue(actual1) && hasValue(actual2) && hasValue(actual3) && hasValue(actual4) && hasValue(actual5)) {
+                currentStage = 'COMPLETED';
+                isCompleted = true;
+                plannedDate = planned5 || planned4 || planned3 || planned2 || planned1;
+            } else {
+                return null;
+            }
+
+            const mapped: ProcessedTallyData = {
+                rowIndex: item.rowIndex.toString(),
+                indentNumber: getFieldValue(item, 'Indent Number', 'indentNumber', 'indentNo').toString().trim(),
+                indentDate: getFieldValue(item, 'Indent Date', 'indentDate'),
+                purchaseDate: getFieldValue(item, 'Purchase Date', 'purchaseDate'),
+                materialInDate: getFieldValue(item, 'Material In Date', 'materialInDate'),
+                plannedDate: plannedDate,
+                productName: getFieldValue(item, 'Product Name', 'productName'),
+                firmNameMatch: getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch').toString().trim(),
+                billNo: getFieldValue(item, 'Bill No.', 'Bill No', 'billNo').toString(),
+                qty: Number(getFieldValue(item, 'Qty', 'qty')) || 0,
+                partyName: getFieldValue(item, 'Party Name', 'partyName'),
+                billAmt: Number(getFieldValue(item, 'Bill Amt', 'billAmt')) || 0,
+                billImage: getFieldValue(item, 'Bill Image', 'billImage'),
+                billReceivedLater: getFieldValue(item, 'Bill Recieved later', 'billReceivedLater'),
+                notReceivedBillNo: getFieldValue(item, 'Not Received Bill No.', 'notReceivedBillNo'),
+                location: getFieldValue(item, 'Location', 'location'),
+                typeOfBills: getFieldValue(item, 'Type Of Bills', 'typeOfBills'),
+                productImage: getFieldValue(item, 'Prodcut Image', 'Product Image', 'productImage'),
+                area: getFieldValue(item, 'Area', 'area'),
+                indentedFor: getFieldValue(item, 'Indented For', 'indentedFor'),
+                approvedPartyName: getFieldValue(item, 'Approved Party Name', 'approvedPartyName'),
+                rate: Number(getFieldValue(item, 'Rate', 'rate')) || 0,
+                indentQty: Number(getFieldValue(item, 'Indent Qty', 'indentQty')) || 0,
+                totalRate: Number(getFieldValue(item, 'Total Rate', 'totalRate')) || 0,
+                liftNumber: getFieldValue(item, 'Lift Number', 'liftNumber'),
+                poNumber: getFieldValue(item, 'PO Number', 'poNumber'),
+                currentStage,
+                isCompleted,
+
+                // Add all remarks fields
+                remarks1: getFieldValue(item, 'Remarks1', 'remarks1'),
+                remarks2: getFieldValue(item, 'Remarks 2', 'remarks2'),
+                remarks3: getFieldValue(item, 'Remarks 3', 'remarks3'),
+                remarks4: getFieldValue(item, 'Remarks 4', 'remarks4'),
+                remarks5: getFieldValue(item, 'Remarks 5', 'remarks5'),
+
+                // Add status fields
+                status1: getFieldValue(item, 'Status 1', 'status1'),
+                status2: getFieldValue(item, 'Status 2', 'status2'),
+                status3: getFieldValue(item, 'Status 3', 'status3'),
+                status4: getFieldValue(item, 'Status 4', 'status4'),
+                status5: getFieldValue(item, 'Status 5', 'status5'),
+            };
+
+            return mapped;
+        }).filter((item): item is ProcessedTallyData => item !== null);
+
+        console.log(`✅ Processed ${processedData.length} items`);
+        console.log('📊 Stage distribution:',
+            processedData.reduce((acc, item) => {
+                const stage = item.currentStage;
+                acc[stage] = (acc[stage] || 0) + 1;
+                return acc;
+            }, {} as Record<string, number>)
         );
-        
-        // Pending items: Planned but not yet executed
-        const pendingItems = filteredByFirm
-            .filter((i) => i.planned1 && i.planned1.trim() !== '' && 
-                    (!i.actual1 || i.actual1.trim() === ''))
-            .map((i) => ({
-                indentNumber: i.indentNumber || '',
-                liftNumber: i.liftNumber || '',
-                poNumber: i.poNumber || '',
-                materialInDate: i.materialInDate || '',
-                productName: i.productName || '',
-                billNo: i.billNo || '',
-                qty: i.qty || 0,
-                partyName: i.partyName || '',
-                billAmt: i.billAmt || 0,
-                billImage: i.billImage || '',
-                billReceivedLater: i.billReceivedLater || '',
-                notReceivedBillNo: i.notReceivedBillNo || '',
-                location: i.location || '',
-                typeOfBills: i.typeOfBills || '',
-                productImage: i.productImage || '',
-                area: i.area || '',
-                indentedFor: i.indentedFor || '',
-                approvedPartyName: i.approvedPartyName || '',
-                rate: i.rate || 0,
-                indentQty: i.indentQty || 0,
-                totalRate: i.totalRate || 0,
-                firmNameMatch: i.firmNameMatch || '',
-                planned1: i.planned1 || '',
-                actual1: i.actual1 || '',
-            }));
-        
-        setPendingData(pendingItems);
-        console.log(`Pending items found: ${pendingItems.length}`, pendingItems);
+
+        setAllData(processedData);
     }, [tallyEntrySheet, user.firmNameMatch]);
 
-    useEffect(() => {
-        const filteredByFirm = tallyEntrySheet.filter(item => 
-            user.firmNameMatch.toLowerCase() === "all" || 
-            item.firmNameMatch?.toLowerCase() === user.firmNameMatch?.toLowerCase()
-        );
-        
-        // History items: Planned and already executed
-        const historyItems = filteredByFirm
-            .filter((i) => i.planned1 && i.planned1.trim() !== '' && 
-                    i.actual1 && i.actual1.trim() !== '')
-            .map((i) => ({
-                indentNumber: i.indentNumber || '',
-                liftNumber: i.liftNumber || '',
-                poNumber: i.poNumber || '',
-                materialInDate: i.materialInDate || '',
-                indentDate: i.indentDate || '',
-                purchaseDate: i.purchaseDate || '',
-                productName: i.productName || '',
-                billNo: i.billNo || '',
-                qty: i.qty || 0,
-                partyName: i.partyName || '',
-                billAmt: i.billAmt || 0,
-                billImage: i.billImage || '',
-                billReceivedLater: i.billReceivedLater || '',
-                notReceivedBillNo: i.notReceivedBillNo || '',
-                location: i.location || '',
-                typeOfBills: i.typeOfBills || '',
-                productImage: i.productImage || '',
-                area: i.area || '',
-                indentedFor: i.indentedFor || '',
-                approvedPartyName: i.approvedPartyName || '',
-                rate: i.rate || 0,
-                indentQty: i.indentQty || 0,
-                totalRate: i.totalRate || 0,
-                status1: i.status1 || '',
-                remarks1: i.remarks1 || '',
-                firmNameMatch: i.firmNameMatch || '',
-                planned1: i.planned1 || '',
-                actual1: i.actual1 || '',
-            }));
-        
-        setHistoryData(historyItems);
-        console.log(`History items found: ${historyItems.length}`, historyItems);
-    }, [tallyEntrySheet, user.firmNameMatch]);
+    // Filter data based on active tab
+    const filteredData = useMemo(() => {
+        let filtered = allData;
 
-    const formatDate = (dateString: string) => {
-        if (!dateString) return '';
-        try {
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return dateString;
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}/${month}/${year}`;
-        } catch {
-            return dateString;
-        }
-    };
-
-    // Helper function to render bill image
-    const renderBillImage = (url: string) => {
-        if (!url || url.trim() === '') {
-            return (
-                <div className="text-center text-gray-400">
-                    <ImageIcon size={16} className="mx-auto mb-1" />
-                    <span className="text-xs">No Image</span>
-                </div>
+        // Filter by stage if not "ALL" or "COMPLETED"
+        if (activeTab === 'COMPLETED') {
+            filtered = filtered.filter(item => item.isCompleted);
+        } else if (activeTab !== 'ALL') {
+            filtered = filtered.filter(item =>
+                !item.isCompleted && item.currentStage === activeTab
             );
+        } else {
+            // ALL shows all pending items (not completed)
+            filtered = filtered.filter(item => !item.isCompleted);
         }
-        
-        return (
-            <Button
-                variant="ghost"
-                size="sm"
-                className="h-8"
-                onClick={() => window.open(url, '_blank')}
-            >
-                <div className="flex items-center gap-1">
-                    <ImageIcon size={14} />
-                    <span className="text-xs">View</span>
-                    <ExternalLink size={12} />
-                </div>
-            </Button>
-        );
-    };
 
-    const pendingColumns: ColumnDef<TallyEntryPendingData>[] = [
-        ...(user.receiveItemView
-            ? [
-                {
-                    header: 'Action',
-                    cell: ({ row }: { row: Row<TallyEntryPendingData> }) => {
-                        const item = row.original;
+        return filtered;
+    }, [allData, activeTab]);
 
-                        return (
-                            <DialogTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setSelectedItem(item);
-                                    }}
-                                >
-                                    Process
-                                </Button>
-                            </DialogTrigger>
-                        );
-                    },
-                },
-            ]
-            : []),
-        { 
-            accessorKey: 'materialInDate', 
-            header: 'Material In Date',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {formatDate(row.original.materialInDate)}
-                </div>
-            )
-        },
-        { accessorKey: 'indentNumber', header: 'Indent No.' },
+    // Get stage counts
+    const stageCounts = useMemo(() => {
+        const counts: Record<string, number> = {
+            ALL: allData.filter(item => !item.isCompleted).length,
+            COMPLETED: allData.filter(item => item.isCompleted).length
+        };
 
-         {
-            accessorKey: 'partyName',
-            header: 'Party Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.partyName}
-                </div>
-            )
-        },
-        
-        { 
-            accessorKey: 'productName', 
-            header: 'Product Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.productName}
-                </div>
-            )
-        },
-         { 
-            accessorKey: 'billNo', 
-            header: 'Bill No.',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.billNo}
-                </div>
-            )
-        },
+        ['AUDIT', 'RECTIFY', 'REAUDIT', 'TALLY_ENTRY', 'AGAIN_AUDIT'].forEach(stage => {
+            counts[stage] = allData.filter(item =>
+                !item.isCompleted && item.currentStage === stage
+            ).length;
+        });
 
-        {
-            accessorKey: 'billImage',
-            header: 'Bill Image',
-            cell: ({ row }) => (
-                <div className="flex justify-center">
-                    {renderBillImage(row.original.billImage)}
-                </div>
-            )
-        },
+        return counts;
+    }, [allData]);
 
-        { 
-            accessorKey: 'qty', 
-            header: 'Qty',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.qty}
-                </div>
-            )
-        },
-        { accessorKey: 'rate', header: 'Rate' },
-        { accessorKey: 'totalRate', header: 'Total Rate' },
-
-        { 
-            accessorKey: 'billAmt', 
-            header: 'Bill Amt',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    ₹{row.original.billAmt}
-                </div>
-            )
-        },
-        { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
-        { accessorKey: 'location', header: 'Location' },
-
-{
-  accessorKey: 'productImage',
-  header: 'Product Image',
-  cell: ({ row }) =>
-    row.original.productImage ? (
-      <a
-        href={row.original.productImage}
-        target="_blank"
-        className="text-primary underline"
-      >
-        View
-      </a>
-    ) : (
-      <span className="text-gray-400">-</span>
-    ),
-},
-
-// { 
-//   accessorKey: 'indentDate',
-//   header: 'Indent Date',
-//   cell: ({ row }) => formatDate(row.original.indentDate ?? ''),
-// },
-
-// {
-//   accessorKey: 'purchaseDate',
-//   header: 'Purchase Date',
-//   cell: ({ row }) => formatDate(row.original.purchaseDate ?? ''),
-// },
-
-{
-  accessorKey: 'billReceivedLater',
-  header: 'Bill Received Later',
-  cell: ({ row }) => (
-    <Badge variant="secondary">
-      {row.original.billReceivedLater || 'No'}
-    </Badge>
-  ),
-},
-
-{
-  accessorKey: 'notReceivedBillNo',
-  header: 'Not Received Bill No.',
-  cell: ({ row }) => row.original.notReceivedBillNo || '-',
-},
-
-
-
-{ accessorKey: 'area', header: 'Area' },
-{ accessorKey: 'indentedFor', header: 'Indented For' },
-// { accessorKey: 'approvedPartyName', header: 'Approved Party Name' },
-
-{ accessorKey: 'indentQty', header: 'Indent Qty' },
-
-       
-       
-        {
-            accessorKey: 'billReceivedLater',
-            header: 'Bill Status',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    <Badge 
-                        variant={row.original.billReceivedLater === 'Bill Received' ? 'default' : 'secondary'}
-                        className="capitalize"
-                    >
-                        {row.original.billReceivedLater || 'Not Received'}
-                    </Badge>
-                </div>
-            )
-        },
-        
-        {
-            accessorKey: 'firmNameMatch',
-            header: 'Firm',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.firmNameMatch}
-                </div>
-            )
-        }
-    ];
-
-    const historyColumns: ColumnDef<TallyEntryHistoryData>[] = [
-        { 
-            accessorKey: 'materialInDate', 
-            header: 'Material In Date',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {formatDate(row.original.materialInDate)}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'productName', 
-            header: 'Product Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.productName}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'billNo', 
-            header: 'Bill No.',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.billNo}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'qty', 
-            header: 'Qty',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.qty}
-                </div>
-            )
-        },
-        { 
-            accessorKey: 'billAmt', 
-            header: 'Bill Amt',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    ₹{row.original.billAmt}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'partyName',
-            header: 'Party Name',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.partyName}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'billImage',
-            header: 'Bill Image',
-            cell: ({ row }) => (
-                <div className="flex justify-center">
-                    {renderBillImage(row.original.billImage)}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'status1',
-            header: 'Status',
-            cell: ({ row }) => {
-                const status = row.original.status1;
-                const variant = status === 'Done' ? 'default' : status === 'Not Done' ? 'destructive' : 'secondary';
-                return (
-                    <div className="flex justify-center">
-                        <Badge variant={variant} className="capitalize">
-                            {status}
-                        </Badge>
-                    </div>
-                );
-            },
-        },
-        { 
-            accessorKey: 'remarks1', 
-            header: 'Remarks',
-            cell: ({ row }) => (
-                <div className="text-center max-w-[200px] truncate" title={row.original.remarks1}>
-                    {row.original.remarks1}
-                </div>
-            )
-        },
-        {
-            accessorKey: 'firmNameMatch',
-            header: 'Firm',
-            cell: ({ row }) => (
-                <div className="text-center">
-                    {row.original.firmNameMatch}
-                </div>
-            )
-        }
-    ];
-
-    const schema = z.object({
-        status1: z
-            .enum(['Done', 'Not Done'], {
-                required_error: 'Please select a status',
-            })
-            .optional()
-            .refine((val) => val !== undefined, {
-                message: 'Please select a status',
-            }),
-        remarks1: z.string().min(1, 'Remarks are required'),
+    // Get schema based on stage
+    const formSchema = z.object({
+        status: z.string().min(1, 'Please select a status'),
+        remarks: z.string().min(1, 'Remarks are required'),
     });
 
-    const form = useForm({
-        resolver: zodResolver(schema),
+    const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
         defaultValues: {
-            status1: undefined as 'Done' | 'Not Done' | undefined,
-            remarks1: '',
+            status: '',
+            remarks: '',
         },
     });
 
+    // Reset form when dialog closes
     useEffect(() => {
         if (!openDialog) {
             form.reset({
-                status1: undefined,
-                remarks1: '',
+                status: undefined,
+                remarks: ''
             });
         }
     }, [openDialog, form]);
 
-    async function onSubmit(values: z.infer<typeof schema>) {
+    // Handle item selection
+    const handleItemSelect = (item: ProcessedTallyData) => {
+        setSelectedRow(item);
+        form.reset({
+            status: '',
+            remarks: '',
+        });
+        setOpenDialog(true);
+    };
+
+    // Handle form submission
+    async function onSubmit(values: z.infer<typeof formSchema>) {
+        if (!selectedRow) {
+            toast.error('No row selected!');
+            return;
+        }
+
         try {
+            console.log('🔄 Starting form submission...');
+            console.log('📝 Selected row:', selectedRow);
+            console.log('📋 Form values:', values);
+
+            // Get current date and time in dd/mm/yyyy hh:mm:ss format
             const currentDateTime = new Date()
                 .toLocaleString('en-GB', {
                     day: '2-digit',
@@ -550,277 +425,664 @@ export default () => {
                 })
                 .replace(',', '');
 
-            await postToSheet(
-                tallyEntrySheet
-                    .filter((s) => s.indentNumber === selectedItem?.indentNumber)
-                    .map((prev) => ({
-                        rowIndex: prev.rowIndex,
-                        actual1: currentDateTime,
-                        status1: values.status1,
-                        remarks1: values.remarks1,
-                    })),
-                'update',
-                'TALLY ENTRY'
-            );
+            console.log('📅 Current date/time:', currentDateTime);
 
-            toast.success(`Updated status for ${selectedItem?.productName}`);
+            // Find the exact row in the original sheet data
+            const sheetRow = tallyEntrySheet?.find((s: SheetItem) => {
+                const indentNumber = getFieldValue(s, 'Indent Number', 'indentNumber', 'indentNo').toString().trim();
+                return indentNumber === selectedRow.indentNumber;
+            });
+
+            if (!sheetRow) {
+                console.error('❌ Could not find matching row in sheet data');
+                toast.error('Could not find matching record in sheet');
+                return;
+            }
+
+            console.log('✅ Found sheet row:', sheetRow);
+            console.log('📊 Row index:', sheetRow.rowIndex);
+
+            // Get stage configuration
+            const stageConfig = STAGES[selectedRow.currentStage];
+
+            // Prepare update data with camelCase field names
+            const updateData = [{
+                rowIndex: sheetRow.rowIndex,
+                [stageConfig.actualField || '']: currentDateTime,
+                [stageConfig.statusField || '']: values.status,
+                [stageConfig.remarksField || '']: values.remarks
+            }];
+
+            console.log('📤 Update data to send:', updateData);
+
+            // Post to Google Sheet
+            await postToSheet(updateData, 'update', 'TALLY ENTRY');
+
+            console.log('✅ Update successful');
+            toast.success(`Status updated for Indent ${selectedRow.indentNumber}`);
+
+            // Close dialog and refresh data
             setOpenDialog(false);
-            setTimeout(() => updateAll(), 1000);
+            setTimeout(() => {
+                updateAll();
+                console.log('🔄 Data refreshed after update');
+            }, 1500);
 
-        } catch {
-            toast.error('Failed to update status');
+        } catch (err) {
+            console.error('❌ Error in onSubmit:', err);
+            toast.error('Failed to update status. Please try again.');
         }
     }
 
-    function onError(e: any) {
-        console.log(e);
+    function onError(errors: any) {
+        console.log(errors);
         toast.error('Please fill all required fields');
     }
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                <div className="p-4 md:p-6">
-                    <div className="max-w-7xl mx-auto">
-                        {/* Header Section */}
-                        <div className="mb-8">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-3 bg-white rounded-xl shadow-sm border">
-                                        <Calculator size={32} className="text-primary" />
-                                    </div>
-                                    <div>
-                                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-                                            Audit Data
-                                        </h1>
-                                        <p className="text-gray-600 mt-1">
-                                            Process tally entries and manage status
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                {/* Stats Cards */}
-                                <div className="flex gap-4">
-                                    <div className="bg-white p-4 rounded-xl shadow-sm border min-w-[140px]">
-                                        <div className="text-sm font-medium text-gray-500">Pending</div>
-                                        <div className="text-2xl font-bold text-amber-600 mt-1">
-                                            {pendingData.length}
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-xl shadow-sm border min-w-[140px]">
-                                        <div className="text-sm font-medium text-gray-500">Completed</div>
-                                        <div className="text-2xl font-bold text-green-600 mt-1">
-                                            {historyData.length}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+    // Columns for pending items (showing ALL columns like your Audit Data page)
+    const pendingColumns: ColumnDef<ProcessedTallyData>[] = [
+        {
+            id: 'actions',
+            header: 'Action',
+            cell: ({ row }: { row: Row<ProcessedTallyData> }) => {
+                const rowData = row.original;
+                const stageInfo = STAGES[rowData.currentStage];
+                const IconComponent = stageInfo?.icon;
 
-                            {/* Tabs */}
-                            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                                <div className="border-b">
-                                    <TabsList className="bg-transparent p-0 h-auto">
-                                        <TabsTrigger 
-                                            value="pending" 
-                                            className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-6 py-3"
-                                        >
-                                            <span className="flex items-center gap-2">
-                                                <span>Pending</span>
-                                                {pendingData.length > 0 && (
-                                                    <Badge variant="secondary" className="ml-2">
-                                                        {pendingData.length}
-                                                    </Badge>
-                                                )}
-                                            </span>
-                                        </TabsTrigger>
-                                        <TabsTrigger 
-                                            value="history" 
-                                            className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-6 py-3"
-                                        >
-                                            <span className="flex items-center gap-2">
-                                                <span>History</span>
-                                                {historyData.length > 0 && (
-                                                    <Badge variant="outline" className="ml-2">
-                                                        {historyData.length}
-                                                    </Badge>
-                                                )}
-                                            </span>
-                                        </TabsTrigger>
-                                    </TabsList>
-                                </div>
+                return (
+                    <DialogTrigger asChild>
+                        <Button
+                            variant="outline"
+                            onClick={() => handleItemSelect(rowData)}
+                            className="flex items-center gap-2"
+                        >
+                            {IconComponent && <IconComponent className="w-4 h-4" />}
+                            Process
+                        </Button>
+                    </DialogTrigger>
+                );
+            },
+        },
+        {
+            accessorKey: 'indentNumber',
+            header: 'Indent No.'
+        },
+        {
+            accessorKey: 'currentStage',
+            header: 'Current Stage',
+            cell: ({ row }) => {
+                const stage = row.original.currentStage;
+                const stageInfo = STAGES[stage];
 
-                                <TabsContent value="pending" className="mt-6">
-                                    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                                        <div className="p-4 border-b">
-                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div>
-                                                    <h3 className="text-lg font-semibold">
-                                                        Pending Tally Entries
-                                                    </h3>
-                                                    <p className="text-gray-600 text-sm">
-                                                        Items scheduled but not yet processed
-                                                    </p>
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    Showing {pendingData.length} entries
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <DataTable
-                                            data={pendingData}
-                                            columns={pendingColumns}
-                                            searchFields={['productName', 'billNo', 'partyName', 'billReceivedLater']}
-                                            dataLoading={false}
-                                            className="border-none"
-                                        />
-                                    </div>
-                                </TabsContent>
+                return (
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${stageInfo?.color || 'bg-gray-100 text-gray-800'}`}>
+                        {stageInfo?.name}
+                    </span>
+                );
+            },
+        },
+        {
+            accessorKey: 'liftNumber',
+            header: 'Lift Number',
+            cell: ({ row }) => row.original.liftNumber || ''
+        },
+        {
+            accessorKey: 'poNumber',
+            header: 'Po Number',
+            cell: ({ row }) => row.original.poNumber || ''
+        },
+        {
+            accessorKey: 'materialInDate',
+            header: 'Material In Date',
+            cell: ({ row }) => formatDate(row.original.materialInDate)
+        },
+        {
+            accessorKey: 'plannedDate',
+            header: 'Planned Date',
+            cell: ({ row }) => formatDate(row.original.plannedDate)
+        },
+        { accessorKey: 'productName', header: 'Product Name' },
+        { accessorKey: 'billNo', header: 'Bill No.' },
+        { accessorKey: 'qty', header: 'Qty' },
+        { accessorKey: 'partyName', header: 'Party Name' },
+        { accessorKey: 'billAmt', header: 'Bill Amt' },
+        {
+            accessorKey: 'billImage',
+            header: 'Bill Image',
+            cell: ({ row }) => {
+                const image = row.original.billImage;
+                return image ? (
+                    <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        View
+                    </a>
+                ) : null;
+            },
+        },
+        { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
+        { accessorKey: 'notReceivedBillNo', header: 'Not Received Bill No.' },
+        { accessorKey: 'location', header: 'Location' },
+        { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
+        {
+            accessorKey: 'productImage',
+            header: 'Product Image',
+            cell: ({ row }) => {
+                const image = row.original.productImage;
+                return image ? (
+                    <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        View
+                    </a>
+                ) : null;
+            },
+        },
+        { accessorKey: 'area', header: 'Area' },
+        { accessorKey: 'indentedFor', header: 'Indented For' },
+        { accessorKey: 'approvedPartyName', header: 'Approved Party Name' },
+        { accessorKey: 'rate', header: 'Rate' },
+        { accessorKey: 'indentQty', header: 'Indent Qty' },
+        { accessorKey: 'totalRate', header: 'Total Rate' },
 
-                                <TabsContent value="history" className="mt-6">
-                                    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                                        <div className="p-4 border-b">
-                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div>
-                                                    <h3 className="text-lg font-semibold">
-                                                        Completed Tally Entries
-                                                    </h3>
-                                                    <p className="text-gray-600 text-sm">
-                                                        Items that have been processed
-                                                    </p>
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    Showing {historyData.length} entries
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <DataTable
-                                            data={historyData}
-                                            columns={historyColumns}
-                                            searchFields={[
-                                                'productName',
-                                                'billNo',
-                                                'partyName',
-                                                'status1',
-                                                'remarks1',
-                                            ]}
-                                            dataLoading={false}
-                                            className="border-none"
-                                        />
-                                    </div>
-                                </TabsContent>
-                            </Tabs>
-                        </div>
+        // Add status and remarks columns for each stage
+        {
+            accessorKey: 'status1',
+            header: 'Audit Status',
+            cell: ({ row }) => {
+                const status = row.original.status1;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks1',
+            header: 'Audit Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks1;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
                     </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status2',
+            header: 'Rectify Status',
+            cell: ({ row }) => {
+                const status = row.original.status2;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks2',
+            header: 'Rectify Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks2;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status3',
+            header: 'Reaudit Status',
+            cell: ({ row }) => {
+                const status = row.original.status3;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks3',
+            header: 'Reaudit Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks3;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status4',
+            header: 'Tally Status',
+            cell: ({ row }) => {
+                const status = row.original.status4;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks4',
+            header: 'Tally Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks4;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status5',
+            header: 'Again Audit Status',
+            cell: ({ row }) => {
+                const status = row.original.status5;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'okey' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks5',
+            header: 'Again Audit Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks5;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+    ];
+
+    // Update completedColumns to show all status and remarks
+    const completedColumns: ColumnDef<ProcessedTallyData>[] = [
+        {
+            accessorKey: 'indentNumber',
+            header: 'Indent No.'
+        },
+        {
+            accessorKey: 'firmNameMatch',
+            header: 'Firm Name'
+        },
+        {
+            accessorKey: 'plannedDate',
+            header: 'Completed Date',
+            cell: ({ row }) => formatDate(row.original.plannedDate)
+        },
+        { accessorKey: 'productName', header: 'Product Name' },
+        { accessorKey: 'billNo', header: 'Bill No' },
+        { accessorKey: 'qty', header: 'Quantity' },
+        { accessorKey: 'partyName', header: 'Party Name' },
+        { accessorKey: 'billAmt', header: 'Bill Amount' },
+        {
+            accessorKey: 'status1',
+            header: 'Audit Status',
+            cell: ({ row }) => {
+                const status = row.original.status1;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks1',
+            header: 'Audit Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks1;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status2',
+            header: 'Rectify Status',
+            cell: ({ row }) => {
+                const status = row.original.status2;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks2',
+            header: 'Rectify Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks2;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status3',
+            header: 'Reaudit Status',
+            cell: ({ row }) => {
+                const status = row.original.status3;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks3',
+            header: 'Reaudit Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks3;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status4',
+            header: 'Tally Status',
+            cell: ({ row }) => {
+                const status = row.original.status4;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks4',
+            header: 'Tally Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks4;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'status5',
+            header: 'Again Audit',
+            cell: ({ row }) => {
+                const status = row.original.status5;
+                return status ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'okey' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                        {status}
+                    </span>
+                ) : null;
+            },
+        },
+        {
+            accessorKey: 'remarks5',
+            header: 'Again Audit Remarks',
+            cell: ({ row }) => {
+                const remarks = row.original.remarks5;
+                return remarks ? (
+                    <div className="max-w-xs truncate" title={remarks}>
+                        {remarks}
+                    </div>
+                ) : null;
+            },
+        },
+    ];
+
+    // Stats data
+    const statsData = [
+        { title: 'Total Pending', value: stageCounts.ALL, color: 'text-gray-600' },
+        { title: 'Audit', value: stageCounts.AUDIT, color: 'text-amber-600' },
+        { title: 'Rectify', value: stageCounts.RECTIFY, color: 'text-blue-600' },
+        { title: 'Reaudit', value: stageCounts.REAUDIT, color: 'text-purple-600' },
+        { title: 'Tally Entry', value: stageCounts.TALLY_ENTRY, color: 'text-cyan-600' },
+        { title: 'Again Auditing', value: stageCounts.AGAIN_AUDIT, color: 'text-orange-600' }
+    ];
+
+    return (
+        <div className="p-4 md:p-6 max-w-full overflow-x-auto">
+            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                <Heading heading="Call Tracker" subtext="Track all stages of account processing">
+                    <Package2 size={50} className="text-primary" />
+                </Heading>
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+                    {statsData.map((stat, index) => (
+                        <div key={index} className="bg-white rounded-lg shadow-sm p-4 border">
+                            <p className="text-sm font-medium text-gray-500 mb-1">{stat.title}</p>
+                            <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+                        </div>
+                    ))}
                 </div>
 
-                {/* Dialog for Processing */}
-                {selectedItem && (
+                <Tabs defaultValue="all" className="w-full">
+                    {/* Tabs Navigation */}
+                    <TabsList className="grid grid-cols-2 md:grid-cols-6 mb-6">
+                        <TabsTrigger value="all" onClick={() => setActiveTab('ALL')}>
+                            All Pending
+                        </TabsTrigger>
+                        <TabsTrigger value="audit" onClick={() => setActiveTab('AUDIT')}>
+                            Audit
+                        </TabsTrigger>
+                        <TabsTrigger value="rectify" onClick={() => setActiveTab('RECTIFY')}>
+                            Rectify
+                        </TabsTrigger>
+                        <TabsTrigger value="reaudit" onClick={() => setActiveTab('REAUDIT')}>
+                            Reaudit
+                        </TabsTrigger>
+                        <TabsTrigger value="tally" onClick={() => setActiveTab('TALLY_ENTRY')}>
+                            Tally Entry
+                        </TabsTrigger>
+                        <TabsTrigger value="again-audit" onClick={() => setActiveTab('AGAIN_AUDIT')}>
+                            Again Auditing
+                        </TabsTrigger>
+                        <TabsTrigger value="completed" onClick={() => setActiveTab('COMPLETED')}>
+                            Completed
+                        </TabsTrigger>
+                    </TabsList>
+
+                    {/* Tabs Content */}
+                    <TabsContent value="all">
+                        <DataTable
+                            data={filteredData}
+                            columns={pendingColumns}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={poMasterLoading}
+                            className='h-[70dvh]'
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="audit">
+                        <DataTable
+                            data={filteredData}
+                            columns={pendingColumns}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={poMasterLoading}
+                            className='h-[70dvh]'
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="rectify">
+                        <DataTable
+                            data={filteredData}
+                            columns={pendingColumns}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={poMasterLoading}
+                            className='h-[70dvh]'
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="reaudit">
+                        <DataTable
+                            data={filteredData}
+                            columns={pendingColumns}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={poMasterLoading}
+                            className='h-[70dvh]'
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="tally">
+                        <DataTable
+                            data={filteredData}
+                            columns={pendingColumns}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={poMasterLoading}
+                            className='h-[70dvh]'
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="again-audit">
+                        <DataTable
+                            data={filteredData}
+                            columns={pendingColumns}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={poMasterLoading}
+                            className='h-[70dvh]'
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="completed">
+                        <DataTable
+                            data={filteredData}
+                            columns={completedColumns}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={poMasterLoading}
+                            className='h-[70dvh]'
+                        />
+                    </TabsContent>
+                </Tabs>
+
+                {selectedRow && (
                     <DialogContent className="sm:max-w-2xl">
                         <Form {...form}>
                             <form
                                 onSubmit={form.handleSubmit(onSubmit, onError)}
-                                className="space-y-6"
+                                className="space-y-5"
                             >
-                                <DialogHeader className="text-center">
-                                    <DialogTitle className="text-2xl">Process Tally Entry</DialogTitle>
+                                <DialogHeader className="space-y-1">
+                                    <DialogTitle>
+                                        {STAGES[selectedRow.currentStage]?.formTitle || 'Update Status'}
+                                    </DialogTitle>
                                     <DialogDescription>
-                                        Process entry for{' '}
-                                        <span className="font-bold text-primary">{selectedItem.productName}</span>
+                                        Process entry for indent number{' '}
+                                        <span className="font-medium">{selectedRow.indentNumber}</span>
+                                        {' '}in{' '}
+                                        <span className="font-medium">{STAGES[selectedRow.currentStage]?.name}</span> stage
                                     </DialogDescription>
                                 </DialogHeader>
 
-                                <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-5 rounded-lg border">
-                                    <h3 className="text-lg font-bold mb-4 text-gray-800">Entry Details</h3>
-                                    
-                                    {/* Bill Image Preview */}
-                                    {selectedItem.billImage && selectedItem.billImage.trim() !== '' && (
-                                        <div className="mb-4 p-3 bg-white rounded-lg border flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <ImageIcon className="text-primary" size={20} />
-                                                <span className="font-medium">Bill Image Available</span>
-                                            </div>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => window.open(selectedItem.billImage, '_blank')}
-                                                className="flex items-center gap-2"
-                                            >
-                                                View Bill
-                                                <ExternalLink size={14} />
-                                            </Button>
+                                <div className="bg-gray-50 p-4 rounded-md grid gap-3">
+                                    <h3 className="text-lg font-bold">Entry Details</h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                        <div className="space-y-1">
+                                            <p className="font-medium text-nowrap">Indent No.</p>
+                                            <p className="text-sm font-light">{selectedRow.indentNumber}</p>
                                         </div>
-                                    )}
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {[
-                                            { label: 'Product Name', value: selectedItem.productName },
-                                            { label: 'Bill No.', value: selectedItem.billNo },
-                                            { label: 'Party Name', value: selectedItem.partyName },
-                                            { label: 'Quantity', value: selectedItem.qty },
-                                            { label: 'Bill Amount', value: `₹${selectedItem.billAmt}` },
-                                            { label: 'Bill Status', value: selectedItem.billReceivedLater || 'Not Received' },
-                                            { label: 'Material In Date', value: formatDate(selectedItem.materialInDate) },
-                                            { label: 'Location', value: selectedItem.location },
-                                            { label: 'Area', value: selectedItem.area },
-                                            { label: 'Firm', value: selectedItem.firmNameMatch },
-                                        ].map((item, index) => (
-                                            <div key={index} className="space-y-1">
-                                                <p className="text-sm font-medium text-gray-500">{item.label}</p>
-                                                <p className="text-base font-semibold text-gray-800">
-                                                    {item.value || 'N/A'}
-                                                </p>
-                                            </div>
-                                        ))}
+                                        <div className="space-y-1">
+                                            <p className="font-medium text-nowrap">Firm Name</p>
+                                            <p className="text-sm font-light">{selectedRow.firmNameMatch}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium text-nowrap">Product Name</p>
+                                            <p className="text-sm font-light">{selectedRow.productName}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Party Name</p>
+                                            <p className="text-sm font-light">{selectedRow.partyName}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Bill No.</p>
+                                            <p className="text-sm font-light">{selectedRow.billNo}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Quantity</p>
+                                            <p className="text-sm font-light">{selectedRow.qty}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Bill Amount</p>
+                                            <p className="text-sm font-light">{selectedRow.billAmt}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Planned Date</p>
+                                            <p className="text-sm font-light">{formatDate(selectedRow.plannedDate)}</p>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="space-y-5">
+                                <div className="grid gap-4">
                                     <FormField
                                         control={form.control}
-                                        name="status1"
+                                        name="status"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel className="text-base">Status *</FormLabel>
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger className="h-12">
+                                                <FormLabel>Status *</FormLabel>
+                                                <FormControl>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value}
+                                                    >
+                                                        <SelectTrigger className="w-full">
                                                             <SelectValue placeholder="Select status" />
                                                         </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="Done" className="py-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                                <span>Done</span>
-                                                            </div>
-                                                        </SelectItem>
-                                                        <SelectItem value="Not Done" className="py-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                                                <span>Not Done</span>
-                                                            </div>
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                        <SelectContent>
+                                                            {selectedRow.currentStage === 'AGAIN_AUDIT' ? (
+                                                                <>
+                                                                    <SelectItem value="okey">Okey</SelectItem>
+                                                                    <SelectItem value="not okey">Not Okey</SelectItem>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <SelectItem value="Done">Done</SelectItem>
+                                                                    <SelectItem value="Not Done">Not Done</SelectItem>
+                                                                </>
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormControl>
                                             </FormItem>
                                         )}
                                     />
 
                                     <FormField
                                         control={form.control}
-                                        name="remarks1"
+                                        name="remarks"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel className="text-base">Remarks *</FormLabel>
+                                                <FormLabel>Remarks *</FormLabel>
                                                 <FormControl>
                                                     <Textarea
-                                                        placeholder="Enter your remarks here..."
+                                                        placeholder="Enter remarks..."
                                                         {...field}
                                                         rows={4}
-                                                        className="resize-none"
                                                     />
                                                 </FormControl>
                                             </FormItem>
@@ -828,26 +1090,20 @@ export default () => {
                                     />
                                 </div>
 
-                                <DialogFooter className="flex flex-col sm:flex-row gap-3">
+                                <DialogFooter>
                                     <DialogClose asChild>
-                                        <Button variant="outline" className="w-full sm:w-auto">
-                                            Cancel
-                                        </Button>
+                                        <Button variant="outline">Close</Button>
                                     </DialogClose>
 
-                                    <Button 
-                                        type="submit" 
-                                        disabled={form.formState.isSubmitting}
-                                        className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
-                                    >
+                                    <Button type="submit" disabled={form.formState.isSubmitting}>
                                         {form.formState.isSubmitting && (
                                             <Loader
                                                 size={20}
                                                 color="white"
-                                                className="mr-2"
+                                                aria-label="Loading Spinner"
                                             />
                                         )}
-                                        {form.formState.isSubmitting ? 'Processing...' : 'Update Status'}
+                                        Update Status
                                     </Button>
                                 </DialogFooter>
                             </form>
@@ -857,4 +1113,6 @@ export default () => {
             </Dialog>
         </div>
     );
-};
+}
+
+
